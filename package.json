@@ -1,0 +1,19 @@
+{
+  "name": "acorn-widget",
+  "productName": "ACORN Widget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "今日课表 / 学期课表 / 成绩单的桌面小组件，数据来自 U of T ACORN",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "debug": "ACORN_DEBUG=1 electron . --remote-debugging-port=9229",
+    "icon": "node scripts/make-icon.mjs",
+    "package": "node scripts/package.mjs",
+    "package:install": "node scripts/package.mjs --install"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.7.2"
+  }
+}
