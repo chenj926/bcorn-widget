@@ -1,0 +1,21 @@
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F8F6F0</item>
+        <item name="android:navigationBarColor">#F8F6F0</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">#F8F6F0</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F8F6F0</item>
+        <item name="android:navigationBarColor">#F8F6F0</item>
+    </style>
+    <style name="WidgetLinkTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>

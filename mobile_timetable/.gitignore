@@ -1,0 +1,19 @@
+.dart_tool/
+.flutter-plugins*
+.packages
+build/
+android/.gradle/
+android/local.properties
+android/key.properties
+*.keystore
+*.jks
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+.DS_Store
+*.iml
+
+# Generated UI preview images are delivered separately.
+docs/preview-*.png

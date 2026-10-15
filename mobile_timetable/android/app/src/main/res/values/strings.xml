@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">今日课表</string>
+    <string name="widget_name">bcorn · 今日课表</string>
+    <string name="widget_description">可拉伸的今日课表，显示当前课程、下一节和全天课程；点击课程打开应用内放大详情。</string>
+    <string name="widget_title">今日课表</string>
+    <string name="widget_brand">BCORN / DAILY</string>
+    <string name="widget_refresh">刷新 ↻</string>
+    <string name="widget_refresh_description">刷新今日课表</string>
+    <string name="widget_open_description">打开课表并编辑课程</string>
+    <string name="widget_empty">今日无课\n留一点时间给自己</string>
+    <string name="widget_setup">还没有课程\n点击这里，添加你的第一节课</string>
+    <string name="widget_invalid">课表暂时无法读取\n请打开应用检查数据</string>
+    <string name="widget_current">正在上课</string>
+    <string name="widget_next">下一节</string>
+    <string name="widget_free">课间时光</string>
+    <string name="widget_finished">今日课程已结束</string>
+    <string name="widget_no_next">今天没有下一节课</string>
+    <string name="widget_course_count">今天 %1$d 节</string>
+    <string name="widget_updated">%1$s 更新 · 可能延迟</string>
+    <string name="widget_location_unset">地点待填写</string>
+    <string name="widget_ended">已结束</string>
+    <string name="widget_upcoming">待上课</string>
+    <string name="widget_open_app">查看详情</string>
+    <string name="link_unavailable">未找到能打开该链接的应用，请检查课程链接。</string>
+</resources>

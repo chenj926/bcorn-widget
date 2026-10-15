@@ -1,0 +1,16 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row_root" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="82dp" android:orientation="horizontal" android:gravity="center_vertical"
+    android:padding="11dp" android:background="@drawable/widget_row_background">
+    <LinearLayout android:layout_width="49dp" android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:id="@+id/row_start" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#172B43" android:textSize="13sp" android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+        <TextView android:id="@+id/row_end" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:textColor="#89908B" android:textSize="10sp" />
+    </LinearLayout>
+    <TextView android:id="@+id/row_accent" android:layout_width="3dp" android:layout_height="42dp" android:background="#487A70" />
+    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:orientation="vertical">
+        <TextView android:id="@+id/row_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#172B43" android:textSize="14sp" android:textStyle="bold" android:maxLines="2" android:ellipsize="end" />
+        <TextView android:id="@+id/row_location" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#75817E" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/row_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:textColor="#487A70" android:textSize="9sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <TextView android:layout_width="18dp" android:layout_height="wrap_content" android:gravity="end" android:text="›" android:textColor="#487A70" android:textSize="23sp" />
+</LinearLayout>
