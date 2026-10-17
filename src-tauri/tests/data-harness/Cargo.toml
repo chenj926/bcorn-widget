@@ -1,0 +1,12 @@
+# Exercise the exact production data/cache module without a platform GUI SDK.
+[package]
+name = "acorn-native-data-tests"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "../../src/data.rs"
+
+[dependencies]
+serde_json = "1"

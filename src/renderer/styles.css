@@ -275,3 +275,91 @@ footer {
 }
 footer:empty { display: none; }
 footer .link { font-size: 11px; font-weight: 600; color: var(--accent); }
+
+/* Local course tools extend the original compact three-tab widget. */
+[hidden] { display: none !important; }
+[data-course] { cursor: pointer; touch-action: pan-y; }
+[data-course]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hero.waitlisted, .slot.waitlisted, .block.waitlisted { border: 1.5px dashed hsl(var(--h) 65% var(--bar-l)); }
+.block.waitlisted { border-left-width: 2.5px; }
+.status-tag { display: inline-block; flex: none; width: fit-content; border: 1px dashed currentColor; border-radius: 4px; padding: 0 4px; font-size: 9px; line-height: 1.5; font-weight: 500; color: var(--muted); }
+.block .status-tag { color: inherit; font-size: 9px; }
+.hero-code { flex-wrap: wrap; }
+.course-toolbar { display: flex; gap: 5px; align-items: center; margin: 0 0 8px; font-size: 11px; color: var(--accent); }
+.course-toolbar button { padding: 4px 6px; border-radius: 6px; }
+.course-toolbar button:hover { background: var(--sunken); }
+.toolbar-spacer { flex: 1; }
+.course-list li { grid-template-columns: 15px minmax(0, 1fr); gap: 6px; padding: 4px 2px; }
+.course-list .course-open { display: grid; grid-template-columns: 8px auto minmax(0, 1fr) auto; align-items: center; gap: 6px; width: 100%; padding: 3px 2px; text-align: left; border-radius: 4px; }
+.course-open .status-tag { grid-column: 2 / -1; }
+.course-list li.waitlisted { border: 1px dashed var(--muted); border-radius: 6px; margin: 2px 0; }
+.course-select { width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer; }
+.term-note { margin: 10px 2px 2px; font-size: 10px; color: var(--muted); }
+button:disabled { opacity: 0.5; cursor: wait; }
+.secondary-btn, .text-btn { padding: 6px 10px; border-radius: 7px; color: var(--accent); }
+.secondary-btn { background: var(--sunken); font-weight: 500; }
+.text-btn { padding: 5px 0; font-size: 12px; }
+.secondary-btn:hover, .text-btn:hover { filter: brightness(0.9); }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.empty-actions .primary-btn { margin-top: 0; }
+.muted { color: var(--muted); }
+
+/* Native dialog provides keyboard focus trapping, Escape and touch scrolling. */
+dialog { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 28px); margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 14px; color: var(--text); background: #f5f5f7; box-shadow: 0 18px 65px #0004; overflow-y: auto; overscroll-behavior: contain; user-select: text; }
+dialog::backdrop { background: #0006; backdrop-filter: blur(3px); }
+#dialog-content { padding: 16px; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.dialog-head h2 { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.dialog-head .icon-btn { flex: none; }
+.dialog-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dialog-actions .primary-btn { margin-top: 0; }
+.detail-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+.detail-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 5px; }
+.meeting-detail { margin-top: 12px; padding: 12px; border-radius: 9px; background: var(--surface); }
+.meeting-detail p { margin: 3px 0; }
+.meeting-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 10px 0 4px; }
+.meeting-detail dt { color: var(--muted); }
+.meeting-detail dd { overflow-wrap: anywhere; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.full-width { grid-column: 1 / -1; }
+.field { display: flex; min-width: 0; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; }
+.field > span { color: var(--muted); }
+.field input, .field select { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; color: var(--text); background: var(--surface); user-select: text; }
+.field input:focus-visible, .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field input[type="time"], .field input[type="date"] { font-variant-numeric: tabular-nums; }
+.field-hint { font-size: 11px; line-height: 1.5; color: var(--muted); margin: 7px 0 12px; overflow-wrap: anywhere; }
+fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 9px; margin: 12px 0; padding: 10px; }
+legend { padding: 0 4px; font-size: 12px; font-weight: 600; }
+.form-error { margin-top: 8px; white-space: pre-line; font-size: 12px; color: #b42318; overflow-wrap: anywhere; }
+.check-field { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.check-field input { accent-color: var(--accent); }
+.import-summary { padding-left: 20px; margin: 10px 0; }
+.context-menu { position: fixed; z-index: 20; min-width: 170px; max-width: calc(100vw - 12px); max-height: calc(100dvh - 12px); overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 10px; background: #f5f5f7; box-shadow: 0 8px 30px #0003; }
+.context-menu button { display: block; width: 100%; padding: 9px 10px; border-radius: 5px; text-align: left; font-size: 12px; }
+.context-menu button:hover, .context-menu button:focus-visible { background: var(--accent-soft); }
+.context-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px; }
+.toast { position: fixed; z-index: 100; left: 12px; right: 12px; bottom: 42px; padding: 10px 12px; border-radius: 10px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow); font-size: 12px; pointer-events: none; }
+footer { overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) {
+  dialog, .context-menu { background: #252528; }
+  .form-error { color: #ff9c94; }
+}
+@media (max-width: 360px) {
+  #dialog-content { padding: 12px; }
+  .form-grid { gap: 6px; }
+  .field input, .field select { padding: 7px 5px; }
+  .course-toolbar { gap: 0; }
+  .course-toolbar button { padding: 4px; }
+}
+@media (pointer: coarse) {
+  .icon-btn { min-width: 34px; min-height: 34px; }
+  .tabs button { min-height: 34px; }
+  .course-toolbar button, .course-open, .secondary-btn, .primary-btn { min-height: 34px; }
+  .course-select { width: 16px; height: 16px; }
+  .course-list li { grid-template-columns: 18px minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .icon-btn.spinning svg { animation: none; } }
+
+.timezone { font-size: 9px; line-height: 1.3; color: var(--muted); letter-spacing: 0.01em; }
+.block .status-tag { position: absolute; right: 2px; bottom: 1px; padding: 0 2px; font-size: 8px; line-height: 1.2; background: hsl(var(--h) var(--block-s) var(--block-l)); }

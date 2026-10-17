@@ -1,0 +1,5 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="320dp" android:minHeight="440dp" android:minResizeWidth="160dp" android:minResizeHeight="150dp"
+    android:targetCellWidth="5" android:targetCellHeight="7" android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0" android:initialLayout="@layout/timetable_widget"
+    android:widgetCategory="home_screen" android:description="@string/widget_description"/>

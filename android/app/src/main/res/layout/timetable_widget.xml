@@ -1,0 +1,5 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#F4F7FB" android:padding="8dp">
+    <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ACORN · 学期课表" android:textColor="#172D44" android:textStyle="bold" android:textSize="14sp" android:maxLines="1"/>
+    <ImageView android:id="@+id/widget_grid" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:scaleType="fitXY" android:contentDescription="学期周课表，点按打开详情"/>
+    <TextView android:id="@+id/widget_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="本地数据 · 点按查看详情" android:textColor="#586B7E" android:textSize="10sp" android:maxLines="2"/>
+</LinearLayout>

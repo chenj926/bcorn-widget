@@ -1,13 +1,11 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, session, nativeImage, safeStorage, screen, shell, powerMonitor } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, session, nativeImage, safeStorage, screen, shell, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const acorn = require('./acorn');
+const CourseTools = require('./shared/course-tools');
 
 const DEBUG = !!process.env.ACORN_DEBUG;
 const PARTITION = 'persist:acorn';
-const REFRESH_EVERY_MS = 3 * 60 * 60 * 1000;
-const KEEPALIVE_EVERY_MS = 10 * 60 * 1000;
-const COOKIE_DAYS = 7;
 
 let widget = null;
 let loginWin = null;
@@ -48,43 +46,6 @@ function writeCache(data) {
   fs.writeFileSync(file('cache.bin'), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : json);
 }
 
-// ---- 登录状态保持 ----
-
-// 只记时间和事件名，用来看 UofT 的会话实际能撑多久（不含任何课表或成绩内容）
-function sessionLog(event) {
-  log(event);
-  try {
-    const p = file('session.log');
-    if (fs.existsSync(p) && fs.statSync(p).size > 64 * 1024) fs.renameSync(p, `${p}.old`);
-    fs.appendFileSync(p, `${new Date().toISOString()} ${event}\n`);
-  } catch {}
-}
-
-// ACORN 和 UofT 登录服务器发的都是"会话 cookie"，应用一退出就没了。像 Chrome 的"继续浏览上次打开的网页"
-// 那样，把 utoronto.ca 下的会话 cookie 改存成带过期时间的 cookie（Chromium 用钥匙串加密存盘），重启后接着用。
-// 服务器那边的会话照样会过期，到期还是要重新登录；这里只是不让"重启应用"本身把登录弄丢。
-function persistAuthCookies() {
-  const { cookies } = acornSession();
-  cookies.on('changed', (_event, cookie, _cause, removed) => {
-    const host = cookie.domain.replace(/^\./, '');
-    if (removed || !cookie.session || !/(^|\.)utoronto\.ca$/.test(host)) return;
-    cookies
-      .set({
-        url: `https://${host}${cookie.path || '/'}`,
-        name: cookie.name,
-        value: cookie.value,
-        ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
-        path: cookie.path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        expirationDate: Date.now() / 1000 + COOKIE_DAYS * 24 * 60 * 60,
-      })
-      .then(() => cookies.flushStore())
-      .catch((err) => log('persist cookie failed:', cookie.name, err.message));
-  });
-}
-
 // ---- 数据刷新 ----
 
 function publish(payload) {
@@ -92,67 +53,33 @@ function publish(payload) {
   widget?.webContents.send('acorn:update', payload);
 }
 
-// ACORN 的会话很短，但 UofT 登录服务器（IdP）的会话更长。ACORN 过期后先在隐藏窗口里
-// 走一遍 SSO：IdP 会话还在就能直接拿到新的 ACORN 会话；要输密码或 MFA 时会卡在登录页，超时放弃。
-function silentLogin(timeoutMs = 15000) {
-  if (loginWin) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const win = new BrowserWindow({ show: false, webPreferences: { partition: PARTITION } });
-    let settled = false;
-    const done = (ok) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      win.destroy();
-      resolve(ok);
-    };
-    const timer = setTimeout(() => done(false), timeoutMs);
-    const check = async (_event, url) => {
-      if (acorn.isAcornAppUrl(url) && (await acorn.isLoggedIn(acornSession()).catch(() => false))) done(true);
-    };
-    win.webContents.on('did-navigate', check);
-    win.webContents.on('did-navigate-in-page', check);
-    win.loadURL(acorn.HOME).catch(() => done(false));
-  });
-}
-
+// Fetch only after an explicit Refresh or completed user-initiated login.
+// Do not silently extend cookies, sign in, poll, or keep sessions alive.
 async function fetchData() {
-  try {
-    return await acorn.fetchAll(acornSession(), readCache(), log);
-  } catch (err) {
-    if (err.code !== 'LOGIN_REQUIRED') throw err;
-    const ok = await silentLogin();
-    sessionLog(ok ? 'refresh: acorn session expired, silent sso ok' : 'refresh: acorn session expired, silent sso failed');
-    if (!ok) throw err;
-    return acorn.fetchAll(acornSession(), readCache(), log);
-  }
-}
-
-// 每 10 分钟发一个很轻的请求，免得 ACORN 和登录服务器的会话因为闲置过期；
-// 已经过期就马上试静默续登，而不是等到下一次 3 小时一次的刷新
-async function keepAlive() {
-  if (refreshing || loginWin || status.state === 'login') return;
-  try {
-    if (await acorn.isLoggedIn(acornSession())) return;
-    const ok = await silentLogin();
-    sessionLog(ok ? 'keepalive: acorn session expired, silent sso ok' : 'keepalive: acorn session expired, silent sso failed');
-    if (!ok) publish({ status: { state: 'login' } });
-  } catch (err) {
-    log('keepalive error:', err.message); // 断网、刚唤醒之类，下一轮再试
-  }
+  return acorn.fetchAll(acornSession(), readCache(), log);
 }
 
 function refresh() {
   refreshing ??= (async () => {
-    publish({ status: { state: 'loading' } });
     try {
+      if (readCache()?.source === 'local') {
+        const answer = await dialog.showMessageBox(widget, {
+          type: 'warning', title: '刷新会替换本地修改',
+          message: 'ACORN 刷新会替换导入或手动编辑的本地课程。',
+          detail: '如需保留课程地址、候补信息或其他本地修改，请先取消并导出完整 JSON 备份。',
+          buttons: ['取消', '刷新并替换'], defaultId: 0, cancelId: 0, noLink: true,
+        });
+        if (answer.response !== 1) return { canceled: true };
+      }
+      publish({ status: { state: 'loading' } });
       const data = await fetchData();
+      data.source = 'acorn';
       writeCache(data);
       publish({ data, status: { state: 'ok' } });
-      sessionLog('refresh ok');
+
     } catch (err) {
       log('refresh failed:', err);
-      if (err.code === 'LOGIN_REQUIRED') sessionLog('refresh: login required');
+
       publish({ status: err.code === 'LOGIN_REQUIRED' ? { state: 'login' } : { state: 'error', message: err.message } });
     } finally {
       refreshing = null;
@@ -187,7 +114,7 @@ function login() {
     const onNavigate = async (_event, url) => {
       if (done || !acorn.isAcornAppUrl(url)) return;
       if (!(await acorn.isLoggedIn(acornSession()))) return;
-      sessionLog('login');
+
       finish(true);
       // 调试模式下保留登录窗口，方便通过 remote debugging 查看 ACORN 的接口
       if (!DEBUG) loginWin?.close();
@@ -229,14 +156,15 @@ function createWidget() {
 
   widget = new BrowserWindow({
     ...bounds,
-    minWidth: 300,
-    minHeight: 380,
+    minWidth: 260,
+    minHeight: 280,
+    resizable: true,
     frame: false,
-    vibrancy: 'under-window',
+    ...(process.platform === 'darwin' ? { vibrancy: 'under-window' } : {}),
     visualEffectState: 'active',
     backgroundColor: '#00000000',
     show: false,
-    skipTaskbar: true,
+    skipTaskbar: process.platform === 'darwin',
     fullscreenable: false,
     maximizable: false,
     minimizable: false,
@@ -329,22 +257,58 @@ app.on('window-all-closed', () => {}); // 关掉小组件也不退出，点 Dock
 
 app.whenReady().then(() => {
   loadState();
-  persistAuthCookies();
-  sessionLog('started');
+  status = readCache() ? { state: 'ok' } : { state: 'offline' };
+
 
   // 点 Dock 图标、在应用程序文件夹里再次双击时：把小组件显示出来并放到最前面
   app.on('activate', showWidget);
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]));
 
-  // 打包版第一次启动时默认打开开机自启，之后以菜单里的选择为准
-  if (app.isPackaged && !state.autoLaunchSet) {
-    setAutoLaunch(true);
-    state.autoLaunchSet = true;
-    saveState();
-  }
-
-  ipcMain.handle('acorn:get-state', () => ({ data: readCache(), status, pinned: state.pinned }));
+  ipcMain.handle('acorn:get-state', () => ({ data: readCache(), status, pinned: state.pinned, capabilities: { authentication: true, localSave: true, calendarExport: true } }));
   ipcMain.handle('acorn:refresh', () => refresh());
+  ipcMain.handle('data:clear', () => {
+    fs.rmSync(file('cache.bin'), { force: true });
+    const payload = { data: null, status: { state: 'offline' }, pinned: state.pinned };
+    publish(payload);
+    return payload;
+  });
+  ipcMain.handle('data:save', (_event, input) => {
+    const result = CourseTools.validateImport(input);
+    if (!result.ok) throw new Error(result.errors.join('\n'));
+    writeCache(result.data);
+    publish({ data: result.data, status: { state: 'ok' } });
+    return { ok: true, warnings: result.warnings };
+  });
+  ipcMain.handle('data:import', async () => {
+    const result = await dialog.showOpenDialog(widget, { properties: ['openFile'], filters: [{ name: 'Timetable JSON', extensions: ['json'] }] });
+    if (result.canceled) return { canceled: true };
+    const stat = fs.statSync(result.filePaths[0]);
+    if (stat.size > 5 * 1024 * 1024) throw new Error('Import is limited to 5 MiB');
+    const parsed = CourseTools.validateImport(fs.readFileSync(result.filePaths[0], 'utf8'));
+    if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
+    writeCache(parsed.data);
+    publish({ data: parsed.data, status: { state: 'ok' } });
+    return { ok: true, data: parsed.data, warnings: parsed.warnings };
+  });
+  ipcMain.handle('calendar:export', async (_event, { filename, content }) => {
+    if (typeof content !== 'string' || content.length > 10 * 1024 * 1024) throw new Error('Invalid export');
+    const isJson = typeof filename === 'string' && filename.toLowerCase().endsWith('.json');
+    if (isJson) {
+      const validation = CourseTools.validateImport(content);
+      if (!validation.ok) throw new Error(validation.errors.join('\n'));
+      content = JSON.stringify(validation.data, null, 2);
+    } else if (!content.startsWith('BEGIN:VCALENDAR')) throw new Error('Invalid calendar');
+    const result = await dialog.showSaveDialog(widget, { defaultPath: path.basename(filename || 'timetable.ics'), filters: [{ name: isJson ? 'Timetable JSON' : 'iCalendar', extensions: [isJson ? 'json' : 'ics'] }] });
+    if (result.canceled) return { canceled: true };
+    fs.writeFileSync(result.filePath, content, 'utf8');
+    return { ok: true };
+  });
+  ipcMain.handle('external:open', async (_event, url) => {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' || !['www.google.com', 'uri.amap.com'].includes(parsed.hostname)) throw new Error('Only Google Maps and AMap links are supported');
+    await shell.openExternal(parsed.href);
+    return { ok: true };
+  });
   ipcMain.handle('acorn:login', () => loginAndRefresh());
   ipcMain.handle('widget:toggle-pin', () => setPinned(!state.pinned));
   ipcMain.on('widget:hide', () => widget?.hide());
@@ -353,11 +317,5 @@ app.whenReady().then(() => {
   createTray();
   createWidget();
 
-  refresh().then(() => {
-    // 第一次用、本地什么都没有时，直接弹登录
-    if (status.state === 'login' && !readCache()) loginAndRefresh();
-  });
-  setInterval(refresh, REFRESH_EVERY_MS);
-  setInterval(keepAlive, KEEPALIVE_EVERY_MS);
-  powerMonitor.on('resume', () => setTimeout(keepAlive, 5000)); // 合盖唤醒后网络要几秒才通
+  // Startup is offline: cached data only. Network access is user initiated.
 });

@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('acorn', {
+  clearData: () => ipcRenderer.invoke('data:clear'),
+  saveData: (data) => ipcRenderer.invoke('data:save', data),
+  importData: () => ipcRenderer.invoke('data:import'),
+  exportCalendar: (options) => ipcRenderer.invoke('calendar:export', options),
+  openExternal: (url) => ipcRenderer.invoke('external:open', url),
   getState: () => ipcRenderer.invoke('acorn:get-state'),
   refresh: () => ipcRenderer.invoke('acorn:refresh'),
   login: () => ipcRenderer.invoke('acorn:login'),

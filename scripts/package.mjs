@@ -18,7 +18,8 @@ const [outDir] = await packager({
   asar: true,
   appBundleId: 'local.acorn-widget',
   appCategoryType: 'public.app-category.education',
-  ignore: [/^\/\.gitignore$/, /^\/dist($|\/)/, /^\/scripts($|\/)/, /^\/\.claude($|\/)/, /^\/README\.md$/, /^\/assets\/icon\./],
+  // Only runtime source/assets are packaged; never imports, screenshots, logs or build tools.
+  ignore: (file) => file !== '' && !/^\/(src|assets|node_modules)(\/|$)/.test(file) && !/^\/(package\.json|package-lock\.json)$/.test(file),
 });
 const built = `${outDir}/${NAME}.app`;
 

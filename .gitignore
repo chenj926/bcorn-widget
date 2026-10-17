@@ -1,3 +1,23 @@
 node_modules/
 .DS_Store
 dist/
+
+# Private course data is imported locally, never committed.
+private/
+course_inputs/
+*.ics
+*.apk
+*.aab
+*.exe
+*.msi
+*.log
+cache.bin
+window-state.json
+.tauri-dist/
+src-tauri/target/
+android/.gradle/
+android/local.properties
+android/**/build/
+artifacts/
+
+**/target/
