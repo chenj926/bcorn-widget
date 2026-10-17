@@ -1,7 +1,7 @@
 {
   "name": "acorn-widget",
   "productName": "ACORN Widget",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "今日课表 / 学期课表 / 成绩单的桌面小组件，数据来自 U of T ACORN",
   "main": "src/main.js",
@@ -18,7 +18,8 @@
     "tauri:build": "tauri build",
     "test:bridges": "node --test src-tauri/tests/*.test.cjs android/tests/bridge.test.cjs",
     "test:renderer": "node tests/renderer-smoke.cjs",
-    "test:android-renderer": "node android/tests/renderer-smoke.cjs"
+    "test:android-renderer": "node android/tests/renderer-smoke.cjs",
+    "test:mobile": "node tests/mobile-interactions.cjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

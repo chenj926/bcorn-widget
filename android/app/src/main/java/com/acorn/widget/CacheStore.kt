@@ -40,10 +40,21 @@ object CacheStore {
             val courses = term.optJSONArray("courses") ?: error("学期缺少 courses 数组")
             val meetings = term.optJSONArray("meetings") ?: error("学期缺少 meetings 数组")
             require(courses.length() <= 1000 && meetings.length() <= 3000) { "课程数量超过限制" }
-            for (j in 0 until courses.length()) require(courses.getJSONObject(j).string("code").isNotBlank()) { "课程缺少 code" }
+            for (j in 0 until courses.length()) {
+                val course = courses.getJSONObject(j)
+                require(course.string("code").isNotBlank()) { "课程缺少 code" }
+                require(course.string("type") in listOf("", "course", "event")) { "课程类型无效" }
+            }
             for (j in 0 until meetings.length()) {
                 val meeting = meetings.getJSONObject(j)
                 require(meeting.string("code").isNotBlank()) { "课时缺少 code" }
+                require(meeting.string("recurrence") in listOf("", "weekly", "once")) { "重复类型无效" }
+                if (meeting.string("recurrence") == "once") {
+                    val day = LocalDate.parse(meeting.getString("date"))
+                    require(term.string("start").isBlank() || day.toString() >= term.string("start")) { "单次事项日期早于日历范围" }
+                    require(term.string("end").isBlank() || day.toString() <= term.string("end")) { "单次事项日期晚于日历范围" }
+                    meeting.put("from", day.toString()).put("until", day.toString()).put("day", day.dayOfWeek.value)
+                } else date(meeting.string("date"))
                 val start = meeting.string("start"); val end = meeting.string("end")
                 // Time-to-be-announced records remain valid; timed records are strictly checked.
                 if (start.isNotBlank() || end.isNotBlank()) {

@@ -122,6 +122,10 @@
           else if (typeof c.credits === 'string') course.credits = str(c.credits, cp + '.credits');
           else fail(cp + '.credits', 'must be a nonnegative number or string');
         }
+        if (c.type !== undefined) {
+          if (!['course', 'event'].includes(c.type)) fail(cp + '.type', 'must be course or event');
+          else course.type = c.type;
+        }
         optionalStrings(c, course, ['status', 'room', 'address', 'building', 'location', 'delivery'], cp);
         term.courses.push(course);
       });
@@ -130,6 +134,20 @@
         const mp = p + '.meetings[' + mi + ']';
         if (!object(m)) { fail(mp, 'must be an object'); return; }
         const meeting = { code: str(m.code, mp + '.code', '', true), title: str(m.title, mp + '.title', ''), section: str(m.section, mp + '.section', ''), kind: str(m.kind, mp + '.kind', ''), day: m.day, start: m.start, end: m.end, location: str(m.location, mp + '.location', ''), from: date(m.from, mp + '.from', term.start), until: date(m.until, mp + '.until', term.end), exdates: [] };
+        if (m.recurrence !== undefined) {
+          if (!['once', 'weekly'].includes(m.recurrence)) fail(mp + '.recurrence', 'must be once or weekly');
+          else meeting.recurrence = m.recurrence;
+        }
+        if (m.date !== undefined) meeting.date = date(m.date, mp + '.date', null);
+        if (m.recurrence === 'once') {
+          if (!meeting.date) fail(mp + '.date', 'one-off events require a real date');
+          else if (meeting.date < term.start || meeting.date > term.end) fail(mp + '.date', 'one-off date must fall within this calendar’s date range');
+          else {
+            meeting.from = meeting.date;
+            meeting.until = meeting.date;
+            meeting.day = ((new Date(meeting.date + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1;
+          }
+        }
         optionalStrings(m, meeting, ['id', 'room', 'address', 'building', 'delivery', 'status'], mp);
         if (meeting.id) {
           if (ids.has(meeting.id)) fail(mp + '.id', 'duplicate meeting id within term');
@@ -144,7 +162,7 @@
         if (isUnscheduled(m.start) && isUnscheduled(m.end)) {
           warnings.push(mp + ': untimed/TBA meeting omitted; course remains in course list.'); return;
         }
-        if (!Number.isInteger(m.day) || m.day < 1 || m.day > 7) fail(mp + '.day', 'must be an integer from 1 (Monday) to 7 (Sunday)');
+        if (!Number.isInteger(meeting.day) || meeting.day < 1 || meeting.day > 7) fail(mp + '.day', 'must be an integer from 1 (Monday) to 7 (Sunday)');
         if (typeof m.start !== 'string' || !TIME.test(m.start)) fail(mp + '.start', 'must be a 24-hour HH:mm time');
         if (typeof m.end !== 'string' || !TIME.test(m.end)) fail(mp + '.end', 'must be a 24-hour HH:mm time');
         if (TIME.test(m.start) && TIME.test(m.end) && m.end <= m.start) fail(mp, 'end must be later than start on the same day; split overnight meetings');
@@ -195,7 +213,19 @@
   }
   function getExportableMeetings(data, options) { return select(data, options).meetings; }
   function addDays(date, days) { return new Date(Date.parse(date + 'T00:00:00Z') + days * DAY_MS).toISOString().slice(0, 10); }
+  function weekStart(date) {
+    if (!validDate(date)) throw new Error('Invalid calendar date.');
+    return addDays(date, -((new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7));
+  }
+  function occursOn(term, meeting, date) {
+    if (!validDate(date) || date < term.start || date > term.end ||
+        (meeting.from && date < meeting.from) || (meeting.until && date > meeting.until) ||
+        (meeting.exdates || []).includes(date)) return false;
+    if (meeting.recurrence === 'once') return date === meeting.date;
+    return meeting.day === ((new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1;
+  }
   function occurrenceDates(term, meeting) {
+    if (meeting.recurrence === 'once') return occursOn(term, meeting, meeting.date) ? [meeting.date] : [];
     const start = [term.start, meeting.from].filter(Boolean).sort().pop();
     const end = [term.end, meeting.until].filter(Boolean).sort()[0];
     if (start > end) return [];
@@ -265,8 +295,9 @@
         const start = localToUtc(day, m.start, term.timezone, formatter), end = localToUtc(day, m.end, term.timezone, formatter);
         if (end <= start) throw new Error('Meeting ends before its start after timezone conversion.');
         const waitlisted = isWaitlisted(m) || term.courses.some(c => c.code === m.code && isWaitlisted(c));
-        const summary = [m.code, m.section, m.title].filter(Boolean).join(' · ');
-        const location = [...new Set([m.location, m.room, m.address].filter(Boolean))].join(', ');
+        const course = term.courses.find(c => c.code === m.code);
+        const summary = course?.type === 'event' ? (m.title || course.title || m.code) : [m.code, m.section, m.title].filter(Boolean).join(' · ');
+        const location = [...new Set([m.location || course?.location, m.room || course?.room, m.address || course?.address].filter(Boolean))].join(', ');
         const description = [m.title, m.kind, 'Timezone: ' + term.timezone, waitlisted ? 'Waitlisted: enrollment is not confirmed.' : ''].filter(Boolean).join('\n');
         lines.push('BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + stamp(now), 'DTSTART:' + stamp(start), 'DTEND:' + stamp(end), 'SUMMARY:' + escapeICSText(summary), 'DESCRIPTION:' + escapeICSText(description));
         if (location) lines.push('LOCATION:' + escapeICSText(location));
@@ -289,5 +320,5 @@
     const query = encodeURIComponent(place.trim());
     return options.provider === 'google' ? 'https://www.google.com/maps/search/?api=1&query=' + query : 'https://uri.amap.com/search?keyword=' + query + '&src=bcorn-widget&callnative=0';
   }
-  return Object.freeze({ DEFAULT_TIMEZONE, MAX_IMPORT_BYTES, validateImport, isWaitlisted, getExportableMeetings, occurrenceDates, localToUtc, exportICS, buildMapUrl, escapeICSText, foldICSLine });
+  return Object.freeze({ DEFAULT_TIMEZONE, MAX_IMPORT_BYTES, validDate, addDays, weekStart, occursOn, validateImport, isWaitlisted, getExportableMeetings, occurrenceDates, localToUtc, exportICS, buildMapUrl, escapeICSText, foldICSLine });
 }));

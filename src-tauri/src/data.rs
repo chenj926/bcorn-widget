@@ -93,6 +93,11 @@ pub fn validate_data(data: &Value) -> Result<(), String> {
         let courses = array(term, "courses", 1000)?;
         for course in courses {
             required_text(course, "code")?;
+            if let Some(kind) = course.get("type") {
+                if !matches!(kind.as_str(), Some("course" | "event")) {
+                    return Err("Invalid course type".into());
+                }
+            }
         }
         for meeting in array(term, "meetings", 3000)? {
             let code = required_text(meeting, "code")?;
@@ -119,6 +124,27 @@ pub fn validate_data(data: &Value) -> Result<(), String> {
                     if !value.as_str().is_some_and(valid_date) {
                         return Err(format!("Invalid {key} date"));
                     }
+                }
+            }
+            if let Some(recurrence) = meeting.get("recurrence") {
+                if !matches!(recurrence.as_str(), Some("once" | "weekly")) {
+                    return Err("Invalid meeting recurrence".into());
+                }
+            }
+            if let Some(date) = meeting.get("date") {
+                if !date.as_str().is_some_and(valid_date) {
+                    return Err("Invalid meeting date".into());
+                }
+            }
+            if meeting.get("recurrence").and_then(Value::as_str) == Some("once") {
+                let date = required_text(meeting, "date")?;
+                if !valid_date(date)
+                    || date < term["start"].as_str().unwrap()
+                    || date > term["end"].as_str().unwrap()
+                    || meeting.get("from").and_then(Value::as_str) != Some(date)
+                    || meeting.get("until").and_then(Value::as_str) != Some(date)
+                {
+                    return Err("One-time meeting needs a date within the term and matching bounds".into());
                 }
             }
             if meeting.get("exdates").is_some() {
@@ -187,6 +213,24 @@ mod tests {
         data["terms"][0]["meetings"][0]["code"] = json!("ABC100");
         data["terms"][0]["meetings"][0]["end"] = json!("09:00");
         assert!(validate_data(&data).is_err());
+    }
+    #[test]
+    fn validates_one_time_event_without_changing_payload() {
+        let data = json!({"terms":[{"id":"term","name":"Term","start":"2026-09-01","end":"2026-12-01","courses":[{"code":"EVT001","type":"event"}],"meetings":[{"code":"EVT001","day":1,"start":"10:00","end":"11:00","recurrence":"once","date":"2026-10-19","from":"2026-10-19","until":"2026-10-19"}]}]});
+        let snapshot = data.clone();
+        assert!(validate_data(&data).is_ok());
+        assert_eq!(data, snapshot);
+        for (key, value) in [("recurrence", "daily"), ("date", "2026-02-30"), ("date", "2027-01-01"), ("from", "2026-10-12"), ("until", "2026-10-26")] {
+            let mut invalid = data.clone();
+            invalid["terms"][0]["meetings"][0][key] = json!(value);
+            assert!(validate_data(&invalid).is_err(), "accepted invalid {key}");
+        }
+        let mut invalid = data.clone();
+        invalid["terms"][0]["courses"][0]["type"] = json!("unknown");
+        assert!(validate_data(&invalid).is_err());
+        invalid = data.clone();
+        invalid["terms"][0]["meetings"][0].as_object_mut().unwrap().remove("date");
+        assert!(validate_data(&invalid).is_err());
     }
     #[test]
     fn clearing_cache_preserves_window_preferences_and_other_files() {

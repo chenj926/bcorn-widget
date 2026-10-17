@@ -151,3 +151,34 @@ node --test tests/course-tools.test.js
 ```
 
 The tests cover original-schema imports, TBA/waitlists, malformed input and limits, transcript compatibility, boundaries, all weekdays, holidays, daylight saving transitions, several timezone offsets, stable UIDs, hostile text escaping, Unicode line folding, browser UMD loading, and safe map URLs. All test data is synthetic.
+
+## Events and actual calendar dates (0.2)
+
+The normal form can create an event without asking for a course code. Internally,
+calendar entries retain the existing `courses` / `meetings` containers for
+backward compatibility, with an explicit `type: "event"` discriminator on the
+entry and a generated stable `code`. Omitted `type` and `type: "course"` mean a
+course. Events display their title rather than their internal identifier.
+
+A meeting now accepts `recurrence: "once"` or `"weekly"` (omitted means weekly).
+For `"once"`, `date` is a required real `YYYY-MM-DD` date within the calendar's
+inclusive start/end range. Validation derives `day`, `from`, and `until` from
+that date; it never expands into subsequent weeks. `exdates` still applies.
+Weekly events use the existing weekday, inclusive date range and exclusions.
+This is local event data, not a link to a third-party calendar or ACORN.
+
+Synthetic example:
+
+```json
+{
+  "courses": [{ "code": "EVT-SYNTHETIC", "type": "event", "title": "Study group" }],
+  "meetings": [{
+    "code": "EVT-SYNTHETIC", "recurrence": "once", "date": "2026-10-18",
+    "day": 7, "start": "10:00", "end": "11:00",
+    "from": "2026-10-18", "until": "2026-10-18", "exdates": []
+  }]
+}
+```
+
+This fragment belongs inside a valid calendar/term. JSON remains an optional
+backup/import format; ordinary course and event creation uses the forms.

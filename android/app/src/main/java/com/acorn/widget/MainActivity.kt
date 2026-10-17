@@ -26,8 +26,12 @@ class MainActivity : Activity() {
     private var documentRequest: String? = null
     private var exportContent: String? = null
     private var openTerm = false
+    private var lastRootBackAt = 0L
+    private var backPending = false
+    private var lastRootBackInteraction = -1L
+    private var backCallback: android.window.OnBackInvokedCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
-    private val unsupported = "Android 尚未接入 ACORN 登录和刷新。请从菜单导入本地 JSON；不会在后台联网。"
+    private val unsupported = "Android 尚未接入 ACORN 登录和刷新。可添加课程、日程或导入本地 JSON；不会在后台联网。"
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         openTerm = intent.getBooleanExtra("openTerm", false)
@@ -78,7 +82,39 @@ class MainActivity : Activity() {
                 if (openTerm) { openTerm = false; web.evaluateJavascript("document.querySelector('[data-tab=term]')?.click()", null) }
             }
         }
+        if (Build.VERSION.SDK_INT >= 33) {
+            backCallback = android.window.OnBackInvokedCallback { handleBack() }.also {
+                onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, it)
+            }
+        }
         web.loadUrl("https://$HOST/src/renderer/index.html")
+    }
+    @Deprecated("API 33+ uses OnBackInvokedDispatcher; older devices use this callback")
+    override fun onBackPressed() { handleBack() }
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode != android.view.KeyEvent.KEYCODE_BACK) lastRootBackAt = 0L
+        return super.dispatchKeyEvent(event)
+    }
+    private fun handleBack() {
+        if (backPending || isFinishing || isDestroyed) return
+        backPending = true
+        // The shared UI consumes overlays, selection and dirty-form confirmation first.
+        web.evaluateJavascript("window.__acornNativeBackState ? window.__acornNativeBackState() : ({consumed: false, interaction: -1})") { result ->
+            backPending = false
+            if (isFinishing || isDestroyed) return@evaluateJavascript
+            val state = try { JSONObject(result) } catch (_: Exception) { JSONObject() }
+            if (state.optBoolean("consumed")) { lastRootBackAt = 0L; return@evaluateJavascript }
+            val interaction = state.optLong("interaction", -1)
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (lastRootBackAt != 0L && now - lastRootBackAt <= 2000L && interaction == lastRootBackInteraction) {
+                lastRootBackAt = 0L
+                moveTaskToBack(true)
+            } else {
+                lastRootBackAt = now
+                lastRootBackInteraction = interaction
+                Toast.makeText(this, "再按一次返回桌面", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent)
@@ -128,7 +164,7 @@ class MainActivity : Activity() {
         }
     }
     private fun menu() {
-        AlertDialog.Builder(this).setTitle("ACORN · 本地模式")
+        AlertDialog.Builder(this).setTitle("bcorn · 本地模式")
             .setItems(arrayOf("导入课表 JSON", "添加桌面小组件", "登录 / 刷新说明", "隐私说明")) { _, index ->
                 when (index) {
                     0 -> chooseImport(null)
@@ -205,8 +241,11 @@ class MainActivity : Activity() {
             .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
         startActivity(intent) // User reviews and saves; never claims the event was saved.
     }
-    override fun onPause() { web.onPause(); web.pauseTimers(); super.onPause() }
+    override fun onPause() { lastRootBackAt = 0L; web.onPause(); web.pauseTimers(); super.onPause() }
     override fun onResume() { super.onResume(); web.onResume(); web.resumeTimers(); TimetableWidgetProvider.updateAll(this) }
-    override fun onDestroy() { fileCallback?.onReceiveValue(null); fileCallback = null; web.removeJavascriptInterface("AcornNative"); web.destroy(); super.onDestroy() }
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        backCallback = null
+        fileCallback?.onReceiveValue(null); fileCallback = null; web.removeJavascriptInterface("AcornNative"); web.destroy(); super.onDestroy() }
     companion object { const val HOST = "appassets.androidplatform.net"; const val HTML_IMPORT = 30; const val IMPORT = 31; const val EXPORT = 32; const val MENU_REQUEST = "menu" }
 }

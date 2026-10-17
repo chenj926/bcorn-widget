@@ -25,6 +25,7 @@ const server = http.createServer((req, res) => {
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 780 }, timezoneId: 'America/Toronto' });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.clock.install({ time: new Date('2026-10-19T13:30:00Z') });
     await page.addInitScript(data => {
       window.__androidTest = { calls: [], data: null, export: null };
       window.AcornNative = { call(id, method, encoded) {
@@ -56,6 +57,10 @@ const server = http.createServer((req, res) => {
     await page.click('[data-tab="term"]');
     assert.equal(await page.locator('.course-open').count(), 2);
     assert.equal(await page.locator('.block.waitlisted').count(), 1);
+    assert.equal(await page.locator('[data-action="export"]').count(), 0);
+    await page.click('[data-action="toggle-course-list"]');
+    await page.click('[data-action="toggle-selection"]');
+    await page.click('[data-action="select-all"]');
     await page.click('.course-toolbar [data-action="export"]');
     await page.click('#export-form [type="submit"]');
     await page.waitForFunction(() => window.__androidTest.export !== null);

@@ -10,14 +10,14 @@ Electron preserves the existing session-based ACORN integration with the least m
 
 Tauri uses the installed WebView2 on Windows rather than packaging another Chromium. Kotlin uses Android's installed WebView; the launcher widget is native RemoteViews backed by a bounded bitmap and does not keep a WebView running. These choices reduce duplicated runtime payload in principle. Actual low-RAM/low-power acceptance still needs measurement on Windows and Vivo X200 Pro/OriginOS 6. No estimated memory or battery percentage is presented as measured.
 
-A pure native rewrite of all Today/Term/Grades UI would increase parity risk. Reusing the original renderer preserves the source of truth and lets the same synthetic regression tests exercise its behavior. Launcher widgets cannot host arbitrary WebViews, so the native widget is a separate rendering surface, not a claim of pixel-identical interactive HTML.
+A pure native rewrite of all Day/Week/Grades UI would increase parity risk. Reusing the original renderer preserves the source of truth and lets the same synthetic regression tests exercise its behavior. Launcher widgets cannot host arbitrary WebViews, so the native widget is a separate rendering surface, not a claim of pixel-identical interactive HTML.
 
 ## Offline and event-driven behavior
 
 - Shared model/calendar helpers have no network dependencies.
 - Electron startup reads cache only. Network requests require Refresh or Login; no hidden SSO retry.
 - Tauri has no ACORN HTTP client, and native IPC is restricted by CSP. Unsupported login/refresh is visible.
-- Android requests no Internet permission. Widget updatePeriodMillis is zero; no AlarmManager, WorkManager, foreground service or network worker. It redraws after local saves, app entry, placement and resize. It shows a semester template, not a time-sensitive live 'now' claim.
+- Android requests no Internet permission. The widget requests a system-batched daily local redraw (`updatePeriodMillis=86400000`); no AlarmManager, WorkManager, foreground service, keepalive or network worker is introduced. It also redraws after local saves, app entry, placement and resize. It shows dated actual weekly occurrences, including one-off events and exclusions. Android/OEM batching can delay rollover; the date header identifies the displayed week and no exact-midnight guarantee is made.
 - Foreground app clock redraw is local UI only, suspended when hidden. It is not data refresh.
 
 ## Data flow

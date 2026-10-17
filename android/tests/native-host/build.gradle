@@ -1,0 +1,18 @@
+plugins { id 'base' }
+repositories {
+    maven { url(System.getenv('ROBOLECTRIC_MAVEN_PROXY') ? System.getenv('ROBOLECTRIC_MAVEN_PROXY') + '/central' : 'https://repo.maven.apache.org/maven2'); allowInsecureProtocol = System.getenv('ROBOLECTRIC_MAVEN_PROXY') != null; metadataSources { mavenPom(); artifact(); ignoreGradleMetadataRedirection() } }
+    maven { url(System.getenv('ROBOLECTRIC_MAVEN_PROXY') ? System.getenv('ROBOLECTRIC_MAVEN_PROXY') + '/google' : 'https://dl.google.com/dl/android/maven2'); allowInsecureProtocol = System.getenv('ROBOLECTRIC_MAVEN_PROXY') != null; metadataSources { mavenPom(); artifact(); ignoreGradleMetadataRedirection() } }
+}
+configurations { robo }
+dependencies {
+    robo 'org.robolectric:robolectric:4.14.1'
+    robo 'junit:junit:4.13.2'
+}
+tasks.register('prepareDependencies') {
+    doLast {
+        copy { from configurations.robo; into "$buildDir/deps" }
+        configurations.robo.files.findAll { it.name.endsWith('.aar') }.each { aar ->
+            copy { from zipTree(aar); include 'classes.jar'; into "$buildDir/aar/${aar.name}" }
+        }
+    }
+}

@@ -17,7 +17,7 @@ cp "$ROOT"/../src/shared/*.js "$OUT/assets/src/shared/"
 cp "$ROOT/app/src/main/assets/"* "$OUT/assets/"
 sed 's/<manifest /<manifest package="com.acorn.widget" /' "$ROOT/app/src/main/AndroidManifest.xml" > "$OUT/AndroidManifest.xml"
 "$BT/aapt2" compile --dir "$ROOT/app/src/main/res" -o "$OUT/resources.zip"
-"$BT/aapt2" link -I "$JAR" --manifest "$OUT/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 35 --version-code 1 --version-name 0.1.0 --java "$OUT/gen" -A "$OUT/assets" -o "$OUT/resources.ap_" "$OUT/resources.zip"
+"$BT/aapt2" link -I "$JAR" --manifest "$OUT/AndroidManifest.xml" --min-sdk-version 26 --target-sdk-version 35 --version-code 2 --version-name 0.2.0 --java "$OUT/gen" -A "$OUT/assets" -o "$OUT/resources.ap_" "$OUT/resources.zip"
 java com.sun.tools.javac.Main -source 17 -target 17 -classpath "$JAR" -d "$OUT/classes" "$OUT/gen/com/acorn/widget/R.java"
 java -cp "$GRADLE_HOME/lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 17 -classpath "$JAR:$GRADLE_HOME/lib/kotlin-stdlib-2.0.21.jar:$OUT/classes" -d "$OUT/classes" "$ROOT"/app/src/main/java/com/acorn/widget/*.kt
 (cd "$OUT/classes" && zip -q -r "$OUT/app.jar" .)

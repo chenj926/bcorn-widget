@@ -1,19 +1,23 @@
-# ACORN Widget: original UI, cross-platform work in progress
+# bcorn: local calendar, cross-platform work in progress
 
-This branch starts from **LoganZ2/bcorn-widget `5d5ac94206e88f161d0ea5caefb5a18590b8dccc`**, the original Electron app. It extends the original HTML/CSS/JavaScript renderer; it does **not** use the unrelated stock `flutter_app` demo as a replacement. The Today / Term / Grades views, colors, course overlap lanes, date exceptions and transcript renderer remain in `src/renderer`.
+This branch starts from **LoganZ2/bcorn-widget `5d5ac94206e88f161d0ea5caefb5a18590b8dccc`**, the original Electron app. It extends the original HTML/CSS/JavaScript renderer; it does **not** use the unrelated stock `flutter_app` demo as a replacement. The shared renderer now uses navigable Day / Week views, with the original Grades view, navy/warm-gray palette, course overlap lanes and date exceptions retained in `src/renderer`.
 
-**This is a partial cross-platform implementation, not a verified Windows/Vivo release.** See [verification and remaining gates](docs/VERIFICATION.md) and [architecture](docs/ARCHITECTURE.md). [Synthetic UI comparison](docs/VISUAL_PARITY.md) shows preservation of the original visual design.
+**This is a partial cross-platform implementation, not a verified Windows/Vivo release.** See [verification and remaining gates](docs/VERIFICATION.md) and [architecture](docs/ARCHITECTURE.md). [Current synthetic mobile UI](docs/MOBILE_UX.md) shows the calendar-first interaction revision; the [earlier visual comparison](docs/VISUAL_PARITY.md) records the original baseline.
 
 ## Three hosts, one original renderer
 
 - **Windows lightweight target: Tauri 2 + system WebView2.** Resizable ordinary desktop window, optional always-on-top, remembered size/position/pin, local JSON cache and native export dialogs. ACORN authentication and manual refresh are **not migrated** to this host; buttons explicitly explain that limitation. It can show imported transcript data using the original Grades view. Windows-target Rust compile/type-check is distinct from a linked Windows installer or Windows runtime test.
-- **Android: native Kotlin app + system WebView + real AppWidgetProvider.** Packages the same renderer, local JSON import/edit/export, and a resizable launcher widget targeting 5×7 cells (actual cell sizes depend on launcher). Native widget draws a static semester weekly template with overlap lanes, compact sizing and waitlist labels. Tapping the widget opens the app; meeting details and long-press menu are inside the app. Launcher long-press remains the launcher's resize/remove UI. ACORN authentication/refresh is **not migrated** here either.
+- **Android: native Kotlin app + system WebView + real AppWidgetProvider.** Packages the same renderer, local JSON import/edit/export, and a resizable launcher widget targeting 5×7 cells (actual cell sizes depend on launcher). Native widget draws the current dated week with overlap lanes, one-off events, compact sizing and dashed waitlist labels. Android may batch its daily local redraw; no exact-midnight guarantee is made. Tapping the widget opens the app; meeting details and long-press menu are inside the app. Launcher long-press remains the launcher's resize/remove UI. ACORN authentication/refresh is **not migrated** here either.
 - **Electron reference host:** retains the original ACORN login and user-triggered refresh implementation, plus local features. It is the parity/authentication reference, **not** the low-footprint target. Original ACORN private endpoints were not exercised against a real account.
 
 All hosts start from local data. No automatic data refresh, hidden login, session keepalive, cloud sync, analytics or recurring network polling is added. The Electron reference's original startup refresh, cookie lifetime extension, periodic refresh, keepalive and wake-triggered requests have been removed. Its login remains explicitly user initiated.
 
-## Course tools
+## Calendar and course tools
 
+- Navigate any day or week with previous/next and a date picker. Grades is unchanged.
+- Create a course or one-off/weekly event through normal forms. Compact detail screens lead to focused editors; advanced fields are folded away.
+- Collapse the course list to prioritize the timetable. Export is contextual to selection.
+- Android Back closes the current level first, warns before discarding edits, and requires a second Back within two seconds only at the root.
 - Tap a course/meeting for details; edit course title, status, credits, room, address, meetings and exceptions.
 - A waitlisted course has a dashed outline and explicit label. Waitlisted meetings are excluded from calendar export by default.
 - TBA courses remain in the course list without fabricated times.

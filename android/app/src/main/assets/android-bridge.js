@@ -4,6 +4,14 @@
   const callbacks = { update: new Set(), pinned: new Set() };
   const pending = new Map();
   let sequence = 0;
+  let interaction = 0;
+  // Count actual UI navigation, not pointer-down: edge-back gestures can dispatch cancelled touches.
+  for (const event of ['click', 'input', 'change', 'scroll']) {
+    window.addEventListener?.(event, () => { interaction += 1; }, true);
+  }
+  window.__acornNativeBackState = () => ({
+    consumed: Boolean(window.acornHandleBack && window.acornHandleBack()), interaction
+  });
   const invoke = (method, value) => new Promise((resolve, reject) => {
     const id = String(++sequence);
     pending.set(id, { resolve, reject });

@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ACORN</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>bcorn</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="titlebar">
     <div class="brand">
-      <span class="brand-mark">ACORN</span>
+      <span class="brand-mark">bcorn</span>
       <span class="date" id="date"></span>
       <span class="timezone" id="timezone"></span>
     </div>
     <div class="actions">
+      <button class="icon-btn" id="btn-add" data-action="add-menu" title="新建" aria-label="新建课程或日程"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
       <button class="icon-btn" id="btn-refresh" data-action="refresh" title="刷新" aria-label="刷新">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>
       </button>
@@ -28,8 +29,8 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="today">今天</button>
-    <button role="tab" data-tab="term">课表</button>
+    <button role="tab" data-tab="today">日</button>
+    <button role="tab" data-tab="term">周</button>
     <button role="tab" data-tab="grades">成绩</button>
   </nav>
 
@@ -37,6 +38,7 @@
   <footer id="footer"></footer>
 
   <dialog id="app-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <dialog id="discard-dialog" aria-labelledby="discard-title"><div class="discard-content"><div class="discard-icon">↶</div><h2 id="discard-title">放弃未保存的修改？</h2><p>离开后，这次修改不会保留。</p><div class="discard-actions"><button class="secondary-btn" data-action="keep-editing" autofocus>继续编辑</button><button class="danger-btn" data-action="discard-changes">放弃修改</button></div></div></dialog>
   <div id="context-menu" class="context-menu" role="menu" aria-label="课程操作" hidden></div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <input type="file" id="json-file" accept=".json,application/json" hidden>

@@ -1,6 +1,6 @@
 [package]
 name = "acorn-widget-lite"
-version = "0.1.0"
+version = "0.2.0"
 description = "Offline-first ACORN timetable desktop shell"
 authors = ["ACORN Widget contributors"]
 edition = "2021"
