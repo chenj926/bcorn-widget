@@ -10,10 +10,10 @@
         android:enableOnBackInvokedCallback="true" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <!-- Enable only after registering the actual package/signing identity and Sheets API. -->
         <meta-data android:name="com.acorn.widget.GRADE_SYNC_CONFIGURED" android:value="false"/>
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+        <activity android:name="com.acorn.widget.MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
-        <receiver android:name=".TimetableWidgetProvider" android:exported="false" android:label="bcorn 本周课表">
+        <receiver android:name="com.acorn.widget.TimetableWidgetProvider" android:exported="false" android:label="bcorn 本周课表">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/timetable_widget_info"/>
         </receiver>

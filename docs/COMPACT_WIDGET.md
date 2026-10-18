@@ -35,7 +35,7 @@ The editable gradebook is separate from the imported transcript and timetable ca
 
 ## Signing and upgrade gate
 
-The previous private Android debug signing key did not survive the cloud workspace reset, and no persisted backup has been found. Source retains `com.acorn.widget` and its local data paths, but that does not by itself make a newly signed APK an update. The offline builder now refuses to silently create a replacement key and supports explicit unsigned verification. Do not uninstall the user's existing app or clear its data to work around signing. A separate, explicitly approved migration or recovery plan is required before an installable replacement can be called safe to update.
+The previous private Android debug signing key did not survive the cloud workspace reset, and no persisted backup has been found. The historical 0.3.0 source retained `com.acorn.widget`. The approved Android 0.3.1 migration now uses `com.bcorn.widget` for a separate installation, with explicit backup/import; it cannot read the old app’s private storage. The offline builder now refuses to silently create a replacement key and supports explicit unsigned verification. Do not uninstall the user's existing app or clear its data to work around signing. The approved parallel migration is documented in ANDROID_PARALLEL_INSTALL.md. Signing remains local to a user-controlled persistent environment; cloud builds remain unsigned, and real-device migration is unverified.
 
 ## Portable backup boundary
 

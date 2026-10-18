@@ -30,3 +30,6 @@ artifacts/
 .env.*.local
 # Optional server research is outside this client-only synchronization release.
 server/grade-sync-relay/
+*.p12
+*.pfx
+__pycache__/

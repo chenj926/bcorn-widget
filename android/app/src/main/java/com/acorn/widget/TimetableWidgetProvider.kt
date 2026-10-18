@@ -58,10 +58,10 @@ class TimetableWidgetProvider : AppWidgetProvider() {
         onUpdate(context, AppWidgetManager.getInstance(context), newWidgetIds)
     }
     companion object {
-        const val ACTION_PREVIOUS = "com.acorn.widget.PREVIOUS_WEEK"
-        const val ACTION_NEXT = "com.acorn.widget.NEXT_WEEK"
-        const val ACTION_TODAY = "com.acorn.widget.TODAY_WEEK"
-        const val ACTION_MODE = "com.acorn.widget.TOGGLE_DAY_WEEK"
+        const val ACTION_PREVIOUS = "com.bcorn.widget.PREVIOUS_WEEK"
+        const val ACTION_NEXT = "com.bcorn.widget.NEXT_WEEK"
+        const val ACTION_TODAY = "com.bcorn.widget.TODAY_WEEK"
+        const val ACTION_MODE = "com.bcorn.widget.TOGGLE_DAY_WEEK"
         private fun JSONObject.optionalString(key: String): String = if (isNull(key)) "" else optString(key)
         private fun waiting(value: JSONObject): Boolean = Regex("wait[\\s_-]*list|waiting|候补|候補", RegexOption.IGNORE_CASE).containsMatchIn(value.optString("status"))
         private val hues = floatArrayOf(212f, 152f, 28f, 338f, 262f, 188f, 96f, 8f)
@@ -107,7 +107,7 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             listOf(R.id.widget_previous to ACTION_PREVIOUS, R.id.widget_next to ACTION_NEXT, R.id.widget_today to ACTION_TODAY, R.id.widget_mode to ACTION_MODE,
                 R.id.widget_previous_compact to ACTION_PREVIOUS, R.id.widget_next_compact to ACTION_NEXT, R.id.widget_today_compact to ACTION_TODAY, R.id.widget_mode_compact to ACTION_MODE).forEach { (view, action) ->
                 val intent = Intent(context, TimetableWidgetProvider::class.java).setAction(action)
-                    .setData(Uri.parse("bcorn-widget://week/$id/$action"))
+                    .setData(Uri.parse("bcorn-widget://${context.packageName}/week/$id/$action"))
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                 views.setOnClickPendingIntent(view, PendingIntent.getBroadcast(context, id, intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))

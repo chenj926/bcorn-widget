@@ -2,7 +2,7 @@
 
 ## 本次原生验证（2026-10-18）
 
-- 恢复官方 Platform 35、Build Tools 35.0.0、Gradle 8.13。当前全部生产 Kotlin 与真实 GMS / OkHttp 依赖已编译，98 项合成 host 测试在两个独立 JVM 中通过；完整 AGP 合并 APK 验证仍待完成。已有签名密钥缺失，没有生成替代密钥；未验证可安装升级或本次 APK 签名。
+- 0.3.1 已恢复官方 Platform 35、Build Tools 35.0.0、Gradle 8.13；完整 AGP debug/release 构建通过。160 项合成 host 测试在两个独立 JVM 中全部通过，使用实际 AGP APK/类/资源；合并 release manifest 与包名/版本验证通过。release 明确未签名；未生成云端密钥，真实 Windows 本地签名与 Vivo 并存迁移尚未验证。详见 `docs/VERIFICATION_0.3.1.md`。
 - Node JavaScript bridge 契约通过。声明的系统日历权限仅在显式 UI 请求后触发；应用清单声明 INTERNET 用于显式连接后的前台成绩同步，不申请 Alarm 权限；官方 GMS 依赖含受保护的授权 callback 组件，最终清单须独立审计，不宣称零 service。
 - Robolectric 4.14.1 + API35 使用实际生产 JVM classes、二进制资源、RemoteViews 与原生 Canvas。完整用例在两个独立 JVM 中执行（当前实际通过数量以 `tests/native-host/build/results-*.txt` 为准；新写用例及旧生产构建结果不能等同于当前源码已通过）。
 - 20 个 widget / cache 用例：真实 RemoteViews.apply/reapply、实际 PendingIntent 广播队列、日/周切换与前后移动一天/七天 / 今天保留模式、两个组件互不干扰、四个互不重叠的 48dp 触点、160 / 180 / 203 / 204 / 260 / 350 / 500dp 尺寸、横屏、旋转重建、删除 / restore ID、两次独立 JVM 重读磁盘缓存及日/周模式、具体日期、跟随今天状态，旧周状态迁移、恢复时 ID 交叠、RGB565 内存上限、损坏 / 空缓存、候补 / TBA、七天含周末、单次 / 排除日、跨时区 / 午夜、DST、教学期外事项、自定义颜色与假期不取消课时。
@@ -17,7 +17,7 @@
 
 ## 手机验收（仍待执行）
 
-1. 使用与旧版同签名的 APK 升级，确认 `com.acorn.widget` 与原私有缓存保留。若签名冲突，不要卸载；先备份并找回正确签名密钥。
+1. 当前 0.3.1 使用新包名 `com.bcorn.widget` 并存安装。先在旧版 `com.acorn.widget` 导出最新完整备份，再在新版预览并导入；逐项核对地址、地点、状态、排除日期与成绩。保留旧版，不卸载、不清除数据。签名必须在用户持久环境完成，见 `docs/ANDROID_PARALLEL_INSTALL.md`。
 2. 空态无演示课表；导入合成 JSON 的预览取消不写数据，确认后才替换。无效 / 超过 2MiB 输入保留已有数据。取消文件选择器不应提示成功。
 3. 顶部状态栏、刘海、横屏导航栏与键盘不遮住内容；键盘收起后底部空白恢复；输入 / 返回先处理编辑与未保存确认。
 4. 添加两个小组件，分别切换日/周模式并浏览不同日期。日视图前后一天，周视图前后七天；切换模式保留日期，点课表进入对应模式及日期。缩放、旋转、普通杀进程再操作仍正确；今天只重置当前组件日期且保留模式。长按保留 launcher 调整大小。

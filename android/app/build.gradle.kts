@@ -2,11 +2,15 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "com.acorn.widget"
     compileSdk = 35
-    defaultConfig { applicationId = "com.acorn.widget"; minSdk = 26; targetSdk = 35; versionCode = 3; versionName = "0.3.0" }
+    // Separate installed identity preserves the legacy app and its private data.
+    defaultConfig { applicationId = "com.bcorn.widget"; minSdk = 26; targetSdk = 35; versionCode = 4; versionName = "0.3.1" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     // Never let AGP silently create a new debug signing identity after environment reset.
-    buildTypes { getByName("debug") { signingConfig = null } }
+    buildTypes {
+        getByName("debug") { signingConfig = null }
+        getByName("release") { isDebuggable = false; signingConfig = null }
+    }
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/rendererAssets"))
 }
 val syncRenderer by tasks.registering(Sync::class) {

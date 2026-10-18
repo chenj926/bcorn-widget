@@ -1,6 +1,6 @@
 # bcorn Android 原生外壳与桌面课表
 
-Kotlin / Android SDK 应用，最低 API 26、目标 API 35。系统 WebView 继续显示共享的 `src/renderer` / `src/shared`，不是另写的替代界面。构建只复制这些公开代码；`mock.js` 不进入 APK。包名 `com.acorn.widget` 和 `files/timetable.json` 缓存路径保持不变。
+Kotlin / Android SDK 应用，最低 API 26、目标 API 35。系统 WebView 继续显示共享的 `src/renderer` / `src/shared`，不是另写的替代界面。构建只复制这些公开代码；`mock.js` 不进入 APK。安装包名为 `com.bcorn.widget`，与旧版 `com.acorn.widget` 并存；Kotlin / 资源 namespace 仍为 `com.acorn.widget`。`files/timetable.json` 相对路径不变，但位于新版独立的 Android 私有沙箱，不能自动读取旧版数据。
 
 ## 桌面小组件
 
@@ -42,7 +42,29 @@ export GRADLE_HOME=/path/to/gradle-8.13
 
 输出 `app/build/offline/acorn-android-unsigned.apk`。这是编译 / 测试产物，不能当作可安装升级包。首次需用常规 Gradle 恢复官方 Google AuthorizationClient 和 OkHttp 依赖；离线脚本再调用 AGP 的 `--offline` 构建，确保合并依赖 AAR 的资源与清单，而非手工拼装不完整 APK。
 
-当前环境已丢失旧 debug key，构建不生成新签名。不要为了安装新签名包卸载旧应用，否则可能丢失私有数据。debug 默认不签名，避免 AGP 自动生成不同身份的密钥；恢复原密钥或另行批准的数据迁移之后才能准备可安装交付。
+当前环境已丢失旧 debug key，构建不生成新签名。不要为了安装新签名包卸载旧应用，否则可能丢失私有数据。debug 默认不签名，避免 AGP 自动生成不同身份的密钥；并存版必须使用另行批准、妥善保存的新签名身份；之后的新版更新必须沿用它。
+
+安装交付候选使用非调试 release 构建（Android 版本 `0.3.1` / code `4`）：
+
+```sh
+"$GRADLE_HOME/bin/gradle" -p android :app:assembleRelease --offline --no-daemon
+```
+
+从仓库根目录运行，然后检查真实合并清单（含依赖提供者 authority）：
+
+```sh
+python3 android/scripts/check-release-identity.py android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
+```
+
+产物为 `android/app/build/outputs/apk/release/app-release-unsigned.apk`，`debuggable=false`，仍须经批准的签名流程处理后才能安装。debug 无签名构建保留给现有 Robolectric host 测试，不能替代最终 release 包验证。
+
+## 与旧版并存及数据迁移
+
+- 保留旧版应用。在旧版选择“备份全部数据…”导出 JSON，再在新版导入，先检查预览再确认。若旧版只支持课表 JSON，仍可导入课表；没有包含在文件中的偏好与成绩不会凭空恢复。
+- 新版不覆盖、删除或直接读取旧版私有目录，也不申请共享 UID。课表、成绩册、WebView 数据、组件浏览状态、日历绑定日志和 Android Keystore 均随新版应用身份隔离。
+- 新版需重新添加桌面组件；旧组件仍属于旧版。新版日历联动默认关闭，请勿让两版同时联动到同一系统日历，以免重复事件。
+- 显式组件保留代码 namespace，RemoteViews 使用当前运行包名；组件导航广播与 URI 使用新版身份。源清单没有自定义 ContentProvider authority 或外部 deep-link 入口；依赖清单仍须通过最终合并清单检查。
+- Google 成绩同步保持未配置；新包名和新签名证书必须单独注册 Android OAuth client 后才能启用。
 
 ## 可选 Google 成绩表
 
@@ -52,6 +74,7 @@ export GRADLE_HOME=/path/to/gradle-8.13
 
 ```sh
 node tests/bridge.test.cjs
+node --test tests/package-identity.test.cjs
 # 官方 host 依赖准备与两次独立 JVM 验证见 tests/native-host/README.md
 ./tests/native-host/run.sh
 ```
