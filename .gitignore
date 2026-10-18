@@ -21,3 +21,12 @@ android/**/build/
 artifacts/
 
 **/target/
+
+# Local signing/auth configuration must never be published.
+*.jks
+*.keystore
+.env
+.env.local
+.env.*.local
+# Optional server research is outside this client-only synchronization release.
+server/grade-sync-relay/

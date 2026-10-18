@@ -40,12 +40,13 @@ public class NativeWidgetHostTest {
   private Context context;
   private AppWidgetManager manager;
   private ShadowAppWidgetManager host;
-  private static final String FIXTURE = "{\"fetchedAt\":\"2026-10-17T00:00:00Z\",\"terms\":[{\"id\":\"synthetic\",\"name\":\"SYNTHETIC TEST TERM\",\"start\":\"2020-01-01\",\"end\":\"2035-12-31\",\"courses\":[{\"code\":\"TEST101H1\",\"status\":\"Enrolled\"},{\"code\":\"TEST202H1\",\"status\":\"Waitlisted\"},{\"code\":\"TEST303H1\",\"status\":\"Enrolled\"}],\"meetings\":[{\"code\":\"TEST101H1\",\"day\":1,\"start\":\"09:00\",\"end\":\"11:00\",\"location\":\"TEST A\",\"kind\":\"LEC\"},{\"code\":\"TEST202H1\",\"day\":1,\"start\":\"10:00\",\"end\":\"12:00\",\"location\":\"TEST B\",\"kind\":\"TUT\"},{\"code\":\"TEST101H1\",\"day\":7,\"start\":\"08:30\",\"end\":\"10:00\",\"location\":\"TEST C\",\"kind\":\"PRA\"}]}]}";
+  private static final String FIXTURE = "{\"fetchedAt\":\"2026-10-17T00:00:00Z\",\"terms\":[{\"id\":\"synthetic\",\"name\":\"SYNTHETIC TEST TERM\",\"start\":\"2020-01-01\",\"end\":\"2035-12-31\",\"courses\":[{\"code\":\"TEST101H1\",\"status\":\"Enrolled\"},{\"code\":\"TEST202H1\",\"status\":\"Waitlisted\"},{\"code\":\"TEST303H1\",\"status\":\"Enrolled\"}],\"meetings\":[{\"code\":\"TEST101H1\",\"day\":1,\"start\":\"09:00\",\"end\":\"11:00\",\"location\":\"ROOM WITH A LONG NAME\",\"kind\":\"LEC\"},{\"code\":\"TEST202H1\",\"day\":1,\"start\":\"10:00\",\"end\":\"12:00\",\"location\":\"ROOM B1234\",\"kind\":\"TUT\"},{\"code\":\"TEST101H1\",\"day\":7,\"start\":\"08:30\",\"end\":\"10:00\",\"location\":\"TEST C\",\"kind\":\"PRA\"}]}]}";
   @Before public void setup() {
     context = RuntimeEnvironment.getApplication();
     manager = AppWidgetManager.getInstance(context);
     host = Shadows.shadowOf(manager);
     CacheStore.INSTANCE.clear(context);
+    new File(context.getFilesDir(), "widget-weeks.json").delete();
   }
   private int widget() { return host.createWidget(TimetableWidgetProvider.class, R.layout.timetable_widget); }
   private View sized(int id, int width, int height) {
@@ -90,6 +91,7 @@ public class NativeWidgetHostTest {
     assertNotNull(launch);
     assertEquals(MainActivity.class.getName(),launch.getComponent().getClassName());
     assertTrue(launch.getBooleanExtra("openTerm",false));
+    assertEquals(WidgetWeekStore.INSTANCE.monday(LocalDate.now(ZoneId.of("America/Toronto"))).toString(),launch.getStringExtra("weekStart"));
     imageEvidence(view,350,490,"widget-empty");
   }
   @Test public void smallAndFiveBySevenResizeRendersBitmap() throws Exception {
@@ -113,7 +115,7 @@ public class NativeWidgetHostTest {
     imageEvidence(large,350,490,"widget-5x7");
     // Separate presentation fixture: invented Mon–Fri schedule, no overlaps or personal data.
     JSONObject realistic=calendar("SYNTHETIC DEMO","America/Toronto","2026-09-01","2026-12-31");
-    String[][] slots={{"ABC101","1","09:00","10:30","ROOM A"},{"DEF202","1","14:00","15:00","ROOM B"},{"GHI303","2","10:00","12:00","ROOM C"},{"JKL404","2","15:00","16:00","ROOM D"},{"MNO505","3","09:30","11:00","ROOM E"},{"PQR606","3","13:00","14:30","ROOM F"},{"STU707","4","11:00","12:30","ROOM G"},{"VWX808","4","15:00","17:00","ROOM H"},{"YZA909","5","10:00","11:30","ROOM I"},{"BCD110","5","14:00","15:30","ROOM J"}};
+    String[][] slots={{"ABC101","1","09:00","10:30","AB204"},{"DEF202","1","14:00","15:00","CD105"},{"GHI303","2","10:00","12:00","EF301"},{"JKL404","2","15:00","16:00","GH112"},{"MNO505","3","09:30","11:00","JK202"},{"PQR606","3","13:00","14:30","LM104"},{"STU707","4","11:00","12:30","NP305"},{"VWX808","4","15:00","17:00","QR108"},{"YZA909","5","10:00","11:30","ST203"},{"BCD110","5","14:00","15:30","UV110"}};
     for(String[] slot:slots) {
       realistic.getJSONArray("courses").put(new JSONObject().put("code",slot[0]).put("status","Enrolled"));
       realistic.getJSONArray("meetings").put(new JSONObject().put("code",slot[0]).put("day",Integer.parseInt(slot[1])).put("start",slot[2]).put("end",slot[3]).put("location",slot[4]).put("kind","LEC"));
@@ -162,7 +164,7 @@ public class NativeWidgetHostTest {
     assertFalse(nextDescription.contains("WEEKLY"));
     assertFalse(nextDescription.contains("SYNTHETIC ONE-OFF"));
     assertTrue("Known scheduled courses are not TBA merely because this week is excluded",nextDescription.contains("时间待定 0"));
-    assertTrue(((TextView)nextHost.findViewById(R.id.widget_week)).getText().toString().contains("2026-10-19"));
+    assertTrue(nextHost.findViewById(R.id.widget_today).getContentDescription().toString().contains("2026-10-19"));
     imageEvidence(firstHost,350,490,"widget-once-current-week");
     imageEvidence(nextHost,350,490,"widget-next-week-excluded");
   }
@@ -242,8 +244,8 @@ public class NativeWidgetHostTest {
     manager.updateAppWidgetOptions(id,options);
     new TimetableWidgetProvider().onAppWidgetOptionsChanged(context,manager,id,options);
     Bitmap bitmap=grid(host.getViewFor(id));
-    assertEquals(484,bitmap.getWidth());
-    assertEquals(94,bitmap.getHeight());
+    assertEquals(488,bitmap.getWidth());
+    assertEquals(120,bitmap.getHeight());
   }
   @Test public void corruptedDiskCacheShowsRecoverableEmptyState() throws Exception {
     try(FileOutputStream stream=new FileOutputStream(new File(context.getFilesDir(),"timetable.json"))) {
@@ -272,16 +274,231 @@ public class NativeWidgetHostTest {
     assertEquals(View.GONE,restored.findViewById(R.id.widget_placeholder).getVisibility());
     assertNotNull(grid(restored));
   }
+  private void clickNavigation(int id,int button,String action) {
+    View view=host.getViewFor(id);
+    assertTrue(view.findViewById(button).performClick());
+    java.util.List<Intent> broadcasts=Shadows.shadowOf(RuntimeEnvironment.getApplication()).getBroadcastIntents();
+    Intent sent=broadcasts.get(broadcasts.size()-1);
+    assertEquals(action,sent.getAction());
+    assertEquals(id,sent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,-1));
+    assertEquals(TimetableWidgetProvider.class.getName(),sent.getComponent().getClassName());
+    // Deliver the actual immutable PendingIntent through Android's registered receiver queue.
+    Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+    assertNull("Week navigation must not launch the Activity",Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity());
+  }
+  @Test public void realNavigationActionsAreIndependentDurableAndDoNotOpenApp() throws Exception {
+    CacheStore.INSTANCE.save(context,FIXTURE);
+    int first=widget(), second=widget();
+    LocalDate today=LocalDate.now(ZoneId.of("America/Toronto"));
+    LocalDate monday=WidgetWeekStore.INSTANCE.monday(today);
+    clickNavigation(first,R.id.widget_next,TimetableWidgetProvider.ACTION_NEXT);
+    assertEquals(today.plusWeeks(1),WidgetWeekStore.INSTANCE.selected(context,first));
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,second));
+    clickNavigation(first,R.id.widget_next,TimetableWidgetProvider.ACTION_NEXT);
+    assertEquals(today.plusWeeks(2),WidgetWeekStore.INSTANCE.selected(context,first));
+    assertTrue(host.getViewFor(first).findViewById(R.id.widget_content).performClick());
+    Intent opened=Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity();
+    assertEquals(monday.plusWeeks(2).toString(),opened.getStringExtra("weekStart"));
+    assertEquals(today.plusWeeks(2).toString(),opened.getStringExtra("selectedDate"));
+    assertEquals("week",opened.getStringExtra("widgetMode"));
+    clickNavigation(second,R.id.widget_previous,TimetableWidgetProvider.ACTION_PREVIOUS);
+    assertEquals(today.minusWeeks(1),WidgetWeekStore.INSTANCE.selected(context,second));
+    sized(first,500,300);
+    host.reconstructWidgetViewAsIfPhoneWasRotated(first);
+    new TimetableWidgetProvider().onUpdate(context,manager,new int[]{first});
+    assertTrue(host.getViewFor(first).findViewById(R.id.widget_today).getContentDescription().toString().contains(monday.plusWeeks(2).toString()));
+    clickNavigation(first,R.id.widget_today,TimetableWidgetProvider.ACTION_TODAY);
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,first));
+    assertEquals(today.minusWeeks(1),WidgetWeekStore.INSTANCE.selected(context,second));
+    View after=TimetableWidgetProvider.Companion.createViews(context,first,350,490,new JSONObject(FIXTURE),monday.plusWeeks(3)).apply(context,new AppWidgetHostView(context));
+    assertTrue(after.findViewById(R.id.widget_today).getContentDescription().toString().contains(monday.plusWeeks(3).toString()));
+  }
+  @Test public void allFourControlsHave48DpNonOverlappingTargetsAtMinimumAndNormalSizes() throws Exception {
+    CacheStore.INSTANCE.save(context,FIXTURE);
+    int id=widget();
+    for(int width:new int[]{160,180,203,204,260,350,500}) {
+      int height=Math.max(150,width);
+      View view=sized(id,width,height);
+      view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.EXACTLY));
+      view.layout(0,0,width,height);
+      int[] controls=width<204?new int[]{R.id.widget_previous_compact,R.id.widget_today_compact,R.id.widget_mode_compact,R.id.widget_next_compact}:new int[]{R.id.widget_previous,R.id.widget_today,R.id.widget_mode,R.id.widget_next};
+      java.util.List<android.graphics.Rect> occupied=new java.util.ArrayList<>();
+      for(int button:controls) {
+        View target=view.findViewById(button);
+        assertTrue("width "+width+" target "+button,target.getWidth()>=48);
+        assertTrue("height "+height+" target "+button,target.getHeight()>=48);assertTrue(target.hasOnClickListeners());assertEquals(View.VISIBLE,target.getVisibility());
+        android.graphics.Rect rect=new android.graphics.Rect(0,0,target.getWidth(),target.getHeight());
+        ((android.view.ViewGroup)view).offsetDescendantRectToMyCoords(target,rect);
+        assertTrue(rect.left>=6&&rect.right<=width-6);
+        for(android.graphics.Rect other:occupied) assertFalse(android.graphics.Rect.intersects(rect,other));
+        occupied.add(rect);
+      }
+      assertEquals(View.GONE,view.findViewById(R.id.widget_hint).getVisibility());
+      assertEquals(width<204?96:48,view.findViewById(width<204?R.id.widget_header_compact:R.id.widget_header).getHeight());
+      assertEquals(height-(width<204?108:60),grid(view).getHeight());
+    }
+  }
+  @Test public void nativeDayToggleAndNavigationKeepEachInstanceIndependent() throws Exception {
+    CacheStore.INSTANCE.save(context,FIXTURE);
+    int first=widget(), second=widget();
+    LocalDate today=LocalDate.now(ZoneId.of("America/Toronto"));
+    View original=host.getViewFor(first);
+    clickNavigation(first,R.id.widget_mode,TimetableWidgetProvider.ACTION_MODE);
+    assertSame("Toggle updates the existing RemoteViews",original,host.getViewFor(first));
+    assertEquals(WidgetWeekStore.Mode.DAY,WidgetWeekStore.INSTANCE.state(context,first).getMode());
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,first));
+    assertEquals(WidgetWeekStore.Mode.WEEK,WidgetWeekStore.INSTANCE.state(context,second).getMode());
+    clickNavigation(first,R.id.widget_next,TimetableWidgetProvider.ACTION_NEXT);
+    assertEquals(today.plusDays(1),WidgetWeekStore.INSTANCE.selected(context,first));
+    clickNavigation(first,R.id.widget_previous,TimetableWidgetProvider.ACTION_PREVIOUS);
+    assertEquals(today,WidgetWeekStore.INSTANCE.selected(context,first));
+    clickNavigation(first,R.id.widget_mode,TimetableWidgetProvider.ACTION_MODE);
+    clickNavigation(first,R.id.widget_next,TimetableWidgetProvider.ACTION_NEXT);
+    assertEquals(today.plusDays(7),WidgetWeekStore.INSTANCE.selected(context,first));
+    sized(first,160,180);
+    clickNavigation(first,R.id.widget_mode_compact,TimetableWidgetProvider.ACTION_MODE);
+    assertEquals(today.plusDays(7),WidgetWeekStore.INSTANCE.selected(context,first));
+    clickNavigation(first,R.id.widget_next_compact,TimetableWidgetProvider.ACTION_NEXT);
+    assertEquals(today.plusDays(8),WidgetWeekStore.INSTANCE.selected(context,first));
+    assertTrue(host.getViewFor(first).findViewById(R.id.widget_content).performClick());
+    Intent opened=Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity();
+    assertEquals(today.plusDays(8).toString(),opened.getStringExtra("selectedDate"));
+    assertEquals(WidgetWeekStore.INSTANCE.monday(today.plusDays(8)).toString(),opened.getStringExtra("weekStart"));
+    assertEquals("day",opened.getStringExtra("widgetMode"));
+    clickNavigation(first,R.id.widget_today_compact,TimetableWidgetProvider.ACTION_TODAY);
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,first));
+    assertEquals(WidgetWeekStore.Mode.DAY,WidgetWeekStore.INSTANCE.state(context,first).getMode());
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,second));
+    host.reconstructWidgetViewAsIfPhoneWasRotated(first);
+    new TimetableWidgetProvider().onUpdate(context,manager,new int[]{first});
+    assertEquals("切换周",((TextView)host.getViewFor(first).findViewById(R.id.widget_mode_compact)).getText().toString());
+  }
+  @Test public void dayAgendaShowsOnlySelectedDateAndPreservesRoomTimeAndOverflow() throws Exception {
+    JSONObject term=calendar("SYNTHETIC DAY","America/Toronto","2026-09-01","2026-10-01");
+    addOnce(term,"MONDAY ONLY","2026-10-12","09:00","10:00");
+    addOnce(term,"ABC101","2026-10-18","09:00","10:00");
+    term.getJSONArray("courses").getJSONObject(1).remove("type");
+    term.getJSONArray("courses").getJSONObject(1).put("title","Applied Systems");
+    term.getJSONArray("meetings").getJSONObject(1).put("title","Sunday Exam");
+    addOnce(term,"DEF202","2026-10-18","13:00","14:30");
+    term.getJSONArray("courses").getJSONObject(2).remove("type");
+    term.getJSONArray("courses").getJSONObject(2).put("title","Design Foundations");
+    term.getJSONArray("meetings").getJSONObject(2).put("title","Sunday Lab");
+    term.getJSONArray("meetings").getJSONObject(1).put("room","ROOM 204").put("location","LONG BUILDING ADDRESS");
+    term.getJSONArray("meetings").getJSONObject(2).put("room","LAB B");
+    term.put("holidays",new JSONArray().put(new JSONObject().put("id","holiday").put("title","Synthetic break").put("kind","holiday").put("start","2026-10-18").put("end","2026-10-18")));
+    JSONObject data=new JSONObject().put("terms",new JSONArray().put(term));
+    WidgetWeekStore.INSTANCE.toggleMode(context,910);
+    WidgetWeekStore.INSTANCE.navigate(context,910,1,LocalDate.parse("2026-10-17"));
+    View day=TimetableWidgetProvider.Companion.createViews(context,910,350,490,data,LocalDate.parse("2026-11-01")).apply(context,new AppWidgetHostView(context));
+    String description=day.findViewById(R.id.widget_grid).getContentDescription().toString();
+    assertTrue(description.contains("2026-10-18，日课表"));assertTrue(description.contains("ABC101 · Sunday Exam"));assertTrue(description.contains("DEF202 · Sunday Lab"));assertFalse(description.contains("Applied Systems"));assertFalse(description.contains("Design Foundations"));
+    assertFalse(description.contains("MONDAY ONLY"));assertTrue(description.contains("ROOM 204"));assertFalse(description.contains("LONG BUILDING ADDRESS"));
+    assertTrue(description.contains("09:00至10:00"));
+    imageEvidence(day,350,490,"widget-day-room-time");
+    View small=TimetableWidgetProvider.Companion.createViews(context,910,160,180,data,LocalDate.parse("2026-11-01")).apply(context,new AppWidgetHostView(context));
+    imageEvidence(small,160,180,"widget-day-small-overflow");
+    View minimum=TimetableWidgetProvider.Companion.createViews(context,910,160,150,data,LocalDate.parse("2026-11-01")).apply(context,new AppWidgetHostView(context));
+    imageEvidence(minimum,160,150,"widget-day-minimum-overflow");
+    for(int n=0;n<7;n++) addOnce(term,"EXTRA "+n,"2026-10-18","15:00","15:15");
+    View busy=TimetableWidgetProvider.Companion.createViews(context,910,350,490,data,LocalDate.parse("2026-11-01")).apply(context,new AppWidgetHostView(context));
+    imageEvidence(busy,350,490,"widget-day-busy-overflow");
+    WidgetWeekStore.INSTANCE.toggleMode(context,910);
+    RemoteViews week=TimetableWidgetProvider.Companion.createViews(context,910,350,490,data,LocalDate.parse("2026-11-01"));
+    week.reapply(context,day);
+    assertTrue(day.findViewById(R.id.widget_grid).getContentDescription().toString().contains("MONDAY ONLY"));
+    assertEquals(LocalDate.parse("2026-10-18"),WidgetWeekStore.INSTANCE.selected(context,910));
+  }
+  @Test public void roomFormatterKeepsIdentifyingSuffixAtNormalAndOverlapWidths() throws Exception {
+    android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    paint.setTextSize(10f);paint.setFakeBoldText(true);
+    java.util.List<String> lines=TimetableWidgetProvider.Companion.compactRoomLines("Very Long Building Name ROOM AB999",38f,text->paint.measureText(text));
+    assertEquals(2,lines.size());assertEquals("AB999",lines.get(1));
+    for(String line:lines) assertTrue(paint.measureText(line)<=38f);
+    assertEquals(Arrays.asList("ZZ101"),TimetableWidgetProvider.Companion.compactRoomLines("ZZ101",38f,text->paint.measureText(text)));
+    assertEquals("204",TimetableWidgetProvider.Companion.compactRoomLines("VeryLongBuildingPrefix204",30f,text->paint.measureText(text)).get(0));
+    assertEquals("999",TimetableWidgetProvider.Companion.compactRoomLines("ROOM AB999",22f,text->paint.measureText(text)).get(1));
+    // Actual font metrics for a 15-minute block must remain vertically inside its own rectangle.
+    paint.setTextSize(7f);
+    android.graphics.Paint.FontMetrics fm=paint.getFontMetrics();
+    float baseline=TimetableWidgetProvider.Companion.centeredTextBaseline(10f,22f,fm.ascent,fm.descent);
+    assertTrue(baseline+fm.ascent>=10f);assertTrue(baseline+fm.descent<=22f);
+    JSONObject term=calendar("SYNTHETIC ROOM STRESS","America/Toronto","2026-10-01","2026-10-31");
+    addOnce(term,"ABC101","2026-10-12","09:00","11:00");
+    addOnce(term,"DEF202","2026-10-13","10:00","10:15");
+    addOnce(term,"GHI303","2026-10-14","11:00","12:00");
+    addOnce(term,"JKL404","2026-10-14","11:15","12:15");
+    for(JSONObject course:CacheStore.INSTANCE.objects(term.getJSONArray("courses"))) { course.remove("type");course.put("title","Applied Systems"); }
+    for(JSONObject meeting:CacheStore.INSTANCE.objects(term.getJSONArray("meetings"))) meeting.put("room","Very Long Building Name ROOM AB999");
+    JSONObject data=new JSONObject().put("terms",new JSONArray().put(term));
+    View view=TimetableWidgetProvider.Companion.createViews(context,912,350,490,data,LocalDate.parse("2026-10-12")).apply(context,new AppWidgetHostView(context));
+    assertTrue(view.findViewById(R.id.widget_grid).getContentDescription().toString().contains("AB999"));
+    imageEvidence(view,350,490,"widget-room-number-stress");
+  }
+  @Test public void legacyWeekStateMigratesAndRestorePreservesDayModeWithoutIdCollisions() throws Exception {
+    java.nio.file.Files.writeString(new File(context.getFilesDir(),"widget-weeks.json").toPath(),"{\"20\":\"2026-10-12\",\"21\":{\"mode\":\"day\",\"date\":\"2026-10-15\"}}");
+    assertEquals(WidgetWeekStore.Mode.WEEK,WidgetWeekStore.INSTANCE.state(context,20).getMode());
+    assertEquals(LocalDate.parse("2026-10-12"),WidgetWeekStore.INSTANCE.selected(context,20));
+    WidgetWeekStore.INSTANCE.toggleMode(context,20);
+    assertEquals(LocalDate.parse("2026-10-12"),WidgetWeekStore.INSTANCE.selected(context,20));
+    WidgetWeekStore.INSTANCE.restore(context,new int[]{20,21},new int[]{21,22});
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,20));
+    assertEquals(LocalDate.parse("2026-10-12"),WidgetWeekStore.INSTANCE.selected(context,21));
+    assertEquals(LocalDate.parse("2026-10-15"),WidgetWeekStore.INSTANCE.selected(context,22));
+    assertEquals(WidgetWeekStore.Mode.DAY,WidgetWeekStore.INSTANCE.state(context,22).getMode());
+    JSONObject persisted=new JSONObject(java.nio.file.Files.readString(new File(context.getFilesDir(),"widget-weeks.json").toPath()));
+    assertTrue(persisted.get("21") instanceof JSONObject);
+  }
+  @Test public void deletedAndRestoredWidgetIdsCannotLeakBrowsingSelection() {
+    int id=widget(), replacement=widget();
+    WidgetWeekStore.INSTANCE.navigate(context,id,1,LocalDate.parse("2026-10-12"));
+    new TimetableWidgetProvider().onRestored(context,new int[]{id},new int[]{replacement});
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,id));
+    assertEquals(LocalDate.parse("2026-10-19"),WidgetWeekStore.INSTANCE.selected(context,replacement));
+    new TimetableWidgetProvider().onDeleted(context,new int[]{replacement});
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,replacement));
+    new TimetableWidgetProvider().onReceive(context,new Intent(context,TimetableWidgetProvider.class).setAction(TimetableWidgetProvider.ACTION_NEXT).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,99999));
+    assertNull(WidgetWeekStore.INSTANCE.selected(context,99999));
+  }
+  @Test public void onceOutsideTermAndHolidayRemainVisibleWithCustomColors() throws Exception {
+    JSONObject term=calendar("TERM","America/Toronto","2026-09-01","2026-10-01");
+    term.getJSONArray("courses").put(new JSONObject().put("code","SYNTH101").put("color","#336699"));
+    term.getJSONArray("meetings").put(new JSONObject().put("id","special-1").put("code","SYNTH101").put("title","SUNDAY EXAM").put("recurrence","once").put("date","2026-10-18").put("day",7).put("start","09:00").put("end","10:00").put("location","ROOM X").put("color","#CC3366"));
+    term.put("holidays",new JSONArray().put(new JSONObject().put("id","break-1").put("title","Synthetic break").put("kind","school-break").put("start","2026-10-18").put("end","2026-10-18")));
+    JSONObject data=new JSONObject().put("terms",new JSONArray().put(term));
+    CacheStore.INSTANCE.save(context,data.toString());
+    assertTrue(TimetableWidgetProvider.Companion.occursOn(term,term.getJSONArray("meetings").getJSONObject(0),LocalDate.parse("2026-10-18")));
+    View view=TimetableWidgetProvider.Companion.createViews(context,909,350,490,data,LocalDate.parse("2026-10-12")).apply(context,new AppWidgetHostView(context));
+    String description=view.findViewById(R.id.widget_grid).getContentDescription().toString();
+    assertTrue(description.contains("SUNDAY EXAM"));assertTrue(description.contains("ROOM X"));
+    Bitmap bitmap=grid(view);
+    assertNotEquals("Sunday card must occupy the seventh column",bitmap.getPixel(265,50),bitmap.getPixel(320,50));
+    imageEvidence(view,350,490,"widget-seven-days-holiday-once-color");
+    View small=TimetableWidgetProvider.Companion.createViews(context,909,180,180,data,LocalDate.parse("2026-10-12")).apply(context,new AppWidgetHostView(context));
+    imageEvidence(small,180,180,"widget-small-sunday");
+  }
   @Test public void separateJvmPersistenceRoundTrip() throws Exception {
     File cacheDir=new File(System.getProperty("process.cache.dir","/tmp/acorn-native-host-process-cache"));
     cacheDir.mkdirs();
     Context persistent=new ContextWrapper(context){@Override public File getFilesDir(){return cacheDir;}};
     if ("seed".equals(System.getProperty("test.phase"))) {
       CacheStore.INSTANCE.save(persistent,FIXTURE);
+      WidgetWeekStore.INSTANCE.navigate(persistent,777,1,LocalDate.parse("2026-10-26"));
+      WidgetWeekStore.INSTANCE.toggleMode(persistent,778);
+      WidgetWeekStore.INSTANCE.navigate(persistent,778,1,LocalDate.parse("2026-10-28"));
+      WidgetWeekStore.INSTANCE.toggleMode(persistent,779);
+      WidgetWeekStore.INSTANCE.followToday(persistent,779);
       assertTrue(new File(cacheDir,"timetable.json").isFile());
       System.out.println("PERSISTENCE_SEEDED separate JVM follow-up required");
     } else {
       assertNotNull("Previous JVM must have seeded synthetic cache",CacheStore.INSTANCE.read(persistent));
+      assertEquals(LocalDate.parse("2026-11-02"),WidgetWeekStore.INSTANCE.selected(persistent,777));
+      assertEquals(WidgetWeekStore.Mode.DAY,WidgetWeekStore.INSTANCE.state(persistent,778).getMode());
+      assertEquals(LocalDate.parse("2026-10-29"),WidgetWeekStore.INSTANCE.selected(persistent,778));
+      assertEquals(WidgetWeekStore.Mode.DAY,WidgetWeekStore.INSTANCE.state(persistent,779).getMode());
+      assertNull(WidgetWeekStore.INSTANCE.selected(persistent,779));
+      View browsed=TimetableWidgetProvider.Companion.createViews(persistent,777,350,490,CacheStore.INSTANCE.read(persistent),LocalDate.parse("2027-01-04")).apply(persistent,new AppWidgetHostView(persistent));
+      assertTrue(browsed.findViewById(R.id.widget_today).getContentDescription().toString().contains("2026-11-02"));
       int id=widget();
       new TimetableWidgetProvider().onUpdate(persistent,manager,new int[]{id});
       assertTrue(((TextView)host.getViewFor(id).findViewById(R.id.widget_title)).getText().toString().contains("SYNTHETIC TEST TERM"));

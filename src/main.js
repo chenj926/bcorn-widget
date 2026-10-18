@@ -3,6 +3,8 @@ const path = require('node:path');
 const fs = require('node:fs');
 const acorn = require('./acorn');
 const CourseTools = require('./shared/course-tools');
+const UserBackup = require('./shared/user-backup');
+const { createGradeStore } = require('./grade-store');
 
 const DEBUG = !!process.env.ACORN_DEBUG;
 const PARTITION = 'persist:acorn';
@@ -266,6 +268,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle('acorn:get-state', () => ({ data: readCache(), status, pinned: state.pinned, capabilities: { authentication: true, localSave: true, calendarExport: true } }));
   ipcMain.handle('acorn:refresh', () => refresh());
+  const gradeStore = createGradeStore(app.getPath('userData'));
+  ipcMain.handle('grades:load', () => gradeStore.load());
+  ipcMain.handle('grades:save', (_event, book) => gradeStore.save(book));
   ipcMain.handle('data:clear', () => {
     fs.rmSync(file('cache.bin'), { force: true });
     const payload = { data: null, status: { state: 'offline' }, pinned: state.pinned };
@@ -294,9 +299,8 @@ app.whenReady().then(() => {
     if (typeof content !== 'string' || content.length > 10 * 1024 * 1024) throw new Error('Invalid export');
     const isJson = typeof filename === 'string' && filename.toLowerCase().endsWith('.json');
     if (isJson) {
-      const validation = CourseTools.validateImport(content);
-      if (!validation.ok) throw new Error(validation.errors.join('\n'));
-      content = JSON.stringify(validation.data, null, 2);
+      const validation = UserBackup.parse(content);
+      content = JSON.stringify(validation.kind === 'backup' ? UserBackup.create(validation.timetable, validation.gradebook, validation.preferences) : validation.timetable, null, 2);
     } else if (!content.startsWith('BEGIN:VCALENDAR')) throw new Error('Invalid calendar');
     const result = await dialog.showSaveDialog(widget, { defaultPath: path.basename(filename || 'timetable.ics'), filters: [{ name: isJson ? 'Timetable JSON' : 'iCalendar', extensions: [isJson ? 'json' : 'ics'] }] });
     if (result.canceled) return { canceled: true };

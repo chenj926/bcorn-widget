@@ -1,0 +1,26 @@
+// Host tests use the exact resolved production runtime graph, never SDK stubs or guessed cache jars.
+// Run after :app:assembleDebug with --offline; this task does not contact accounts or services.
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.findProject(':app')
+    if (app == null) throw new GradleException('Expected the Android app project')
+    app.tasks.register('exportNativeHostRuntime') {
+        doLast {
+            def output = new File(gradle.rootProject.projectDir, 'tests/native-host/build/production-runtime')
+            app.delete(output)
+            output.mkdirs()
+            app.configurations.getByName('debugRuntimeClasspath').resolvedConfiguration.resolvedArtifacts.each { artifact ->
+                def file = artifact.file
+                def name = artifact.moduleVersion.id.toString().replace(':', '-')
+                if (file.name.endsWith('.aar')) {
+                    app.copy {
+                        from app.zipTree(file)
+                        include 'classes.jar', 'libs/*.jar'
+                        into new File(output, name)
+                    }
+                } else if (file.name.endsWith('.jar')) {
+                    app.copy { from file; into new File(output, name) }
+                } else throw new GradleException("Unexpected runtime artifact: ${file.name}")
+            }
+        }
+    }
+}

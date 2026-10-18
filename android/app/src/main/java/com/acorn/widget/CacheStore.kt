@@ -37,22 +37,32 @@ object CacheStore {
             val term = terms.getJSONObject(i)
             require(term.string("id").isNotBlank()) { "学期缺少 id" }
             date(term.string("start")); date(term.string("end"))
+            term.optJSONArray("holidays")?.let { holidays ->
+                require(holidays.length() <= 1000) { "假期数量超过限制" }
+                for (j in 0 until holidays.length()) {
+                    val holiday = holidays.getJSONObject(j)
+                    require(holiday.string("id").isNotBlank() && holiday.string("title").isNotBlank()) { "假期缺少名称或 id" }
+                    require(holiday.string("kind") in listOf("holiday", "school-break")) { "假期类型无效" }
+                    LocalDate.parse(holiday.getString("start")); LocalDate.parse(holiday.getString("end"))
+                    require(holiday.getString("end") >= holiday.getString("start")) { "假期日期范围无效" }
+                }
+            }
             val courses = term.optJSONArray("courses") ?: error("学期缺少 courses 数组")
             val meetings = term.optJSONArray("meetings") ?: error("学期缺少 meetings 数组")
             require(courses.length() <= 1000 && meetings.length() <= 3000) { "课程数量超过限制" }
             for (j in 0 until courses.length()) {
                 val course = courses.getJSONObject(j)
+                color(course.string("color"))
                 require(course.string("code").isNotBlank()) { "课程缺少 code" }
                 require(course.string("type") in listOf("", "course", "event")) { "课程类型无效" }
             }
             for (j in 0 until meetings.length()) {
                 val meeting = meetings.getJSONObject(j)
+                color(meeting.string("color"))
                 require(meeting.string("code").isNotBlank()) { "课时缺少 code" }
                 require(meeting.string("recurrence") in listOf("", "weekly", "once")) { "重复类型无效" }
                 if (meeting.string("recurrence") == "once") {
                     val day = LocalDate.parse(meeting.getString("date"))
-                    require(term.string("start").isBlank() || day.toString() >= term.string("start")) { "单次事项日期早于日历范围" }
-                    require(term.string("end").isBlank() || day.toString() <= term.string("end")) { "单次事项日期晚于日历范围" }
                     meeting.put("from", day.toString()).put("until", day.toString()).put("day", day.dayOfWeek.value)
                 } else date(meeting.string("date"))
                 val start = meeting.string("start"); val end = meeting.string("end")
@@ -70,6 +80,7 @@ object CacheStore {
         }
         return data
     }
+    private fun color(value: String) { require(value.isBlank() || Regex("^#[0-9A-Fa-f]{6}$").matches(value)) { "颜色必须为 #RRGGBB" } }
     private fun date(value: String) { if (value.isNotBlank()) LocalDate.parse(value) }
     fun time(value: String): Int? {
         if (!Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matches(value)) return null

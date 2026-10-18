@@ -1,0 +1,7 @@
+.cloud-calendar-panel { display: grid; gap: 12px; }
+.cloud-calendar-panel p { margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
+.cloud-calendar-panel select { max-width: 100%; min-width: 0; }
+.cloud-calendar-consent { display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; }
+.cloud-calendar-consent input { flex: 0 0 auto; margin-top: 4px; }
+.cloud-calendar-panel button, #cloud-calendar-delete button { min-height: 44px; white-space: normal; }
+.cloud-calendar-panel[aria-busy="true"] { cursor: progress; }

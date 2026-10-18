@@ -45,8 +45,32 @@ const bridge = context.window.acorn;
   const cleared = { data: null, status: { state: 'unsupported' } };
   context.window.__acornNativeReply('4', cleared, null);
   assert.deepEqual(await clear, cleared);
+  for (const method of ['calendarStatus', 'requestCalendarPermission', 'listCalendars', 'selectCalendar', 'syncCalendarEvent', 'removeCalendarEvent', 'loadGradeBook', 'saveGradeBook']) {
+    const operation = bridge[method]({ synthetic: true });
+    const call = calls.shift(); assert.equal(call[1], method);
+    context.window.__acornNativeReply(call[0], { ok: true }, null);
+    assert.deepEqual(await operation, { ok: true });
+  }
+  for (const method of ['getGradeSyncStatus', 'connectGradeSheet', 'gradeSheetsRequest', 'gradeSheetVersion']) {
+    const operation = bridge[method]({ synthetic: true });
+    const call = calls.shift(); assert.equal(call[1], method);
+    context.window.__acornNativeReply(call[0], { ok: true }, null);
+    assert.deepEqual(await operation, { ok: true });
+  }
+  for (const [method, args, expected] of [
+    ['loadGradeSyncState', ['synthetic-connection'], { connectionId: 'synthetic-connection' }],
+    ['saveGradeSyncState', ['synthetic-connection', { schemaVersion: 1 }], { connectionId: 'synthetic-connection', envelope: { schemaVersion: 1 } }]
+  ]) {
+    const operation = bridge[method](...args), call = calls.shift();
+    assert.equal(call[1], method); assert.deepEqual(JSON.parse(call[2]), expected);
+    context.window.__acornNativeReply(call[0], { ok: true }, null); await operation;
+  }
+  assert.equal(bridge.getAccessToken, undefined);
   const manifest = fs.readFileSync(path.join(root, 'app/src/main/AndroidManifest.xml'), 'utf8');
-  assert(!manifest.includes('<uses-permission'));
+  assert(manifest.includes('com.acorn.widget.GRADE_SYNC_CONFIGURED'));
+  assert(manifest.includes('android:value="false"'));
+  const permissions = [...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(permissions.sort(), ['android.permission.INTERNET', 'android.permission.READ_CALENDAR', 'android.permission.WRITE_CALENDAR']);
   assert(!manifest.includes('<service'));
   assert(manifest.includes('android:allowBackup="false"'));
   assert(manifest.includes('android:exported="false"'));
@@ -57,5 +81,5 @@ const bridge = context.window.acorn;
   assert(widget.includes('android:targetCellWidth="5"'));
   assert(widget.includes('android:targetCellHeight="7"'));
   assert(widget.includes('android:resizeMode="horizontal|vertical"'));
-  console.log('PASS Android bridge state/update/save/export and static no-permission/no-service daily local widget contract');
+  console.log('PASS Android bridge state/update/save/export and static opt-in-calendar/foreground-grade-network/no-service daily local widget contract');
 })().catch(error => { console.error(error); process.exitCode = 1; });

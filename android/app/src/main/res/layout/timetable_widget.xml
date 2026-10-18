@@ -1,9 +1,30 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#F4F7FB" android:padding="8dp">
-    <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="bcorn · 本地课表" android:textColor="#172D44" android:textStyle="bold" android:textSize="14sp" android:maxLines="1"/>
-    <TextView android:id="@+id/widget_week" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="日期与时区随本地课表显示" android:textColor="#586B7E" android:textSize="9sp" android:maxLines="2"/>
-    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#F4F7FB" android:padding="6dp">
+    <LinearLayout android:id="@+id/widget_header" android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/widget_previous" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="‹" android:textColor="#20354A" android:textSize="26sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="上一周"/>
+        <LinearLayout android:id="@+id/widget_today" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:minWidth="48dp" android:orientation="vertical" android:gravity="center" android:background="?android:attr/selectableItemBackground" android:contentDescription="回到今天所在周">
+            <TextView android:id="@+id/widget_title" android:visibility="gone" android:layout_width="match_parent" android:layout_height="15dp" android:gravity="center" android:includeFontPadding="false" android:text="bcorn" android:textColor="#20354A" android:textSize="10sp" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/widget_week" android:layout_width="match_parent" android:layout_height="23dp" android:gravity="center" android:includeFontPadding="false" android:text="本地周课表" android:textColor="#20354A" android:textStyle="bold" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:layout_width="match_parent" android:layout_height="19dp" android:gravity="center" android:includeFontPadding="false" android:text="今天" android:textColor="#526B88" android:textSize="11sp" android:maxLines="1"/>
+        </LinearLayout>
+        <TextView android:id="@+id/widget_mode" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="切换日" android:textColor="#20354A" android:textSize="11sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="切换为日视图"/>
+        <TextView android:id="@+id/widget_next" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="›" android:textColor="#20354A" android:textSize="26sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="下一周"/>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/widget_header_compact" android:visibility="gone" android:layout_width="match_parent" android:layout_height="96dp" android:orientation="vertical">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal">
+            <TextView android:id="@+id/widget_previous_compact" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="‹" android:textColor="#20354A" android:textSize="26sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="上一周"/>
+            <LinearLayout android:id="@+id/widget_today_compact" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:minWidth="48dp" android:orientation="vertical" android:gravity="center" android:background="?android:attr/selectableItemBackground" android:contentDescription="回到今天">
+                <TextView android:id="@+id/widget_date_compact" android:layout_width="match_parent" android:layout_height="23dp" android:gravity="center" android:includeFontPadding="false" android:text="本地周课表" android:textColor="#20354A" android:textStyle="bold" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"/>
+                <TextView android:layout_width="match_parent" android:layout_height="19dp" android:gravity="center" android:includeFontPadding="false" android:text="今天" android:textColor="#526B88" android:textSize="11sp" android:maxLines="1"/>
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal">
+            <TextView android:id="@+id/widget_mode_compact" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:gravity="center" android:text="切换日视图" android:textColor="#20354A" android:textSize="11sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="切换为日视图"/>
+            <TextView android:id="@+id/widget_next_compact" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="›" android:textColor="#20354A" android:textSize="26sp" android:background="?android:attr/selectableItemBackground" android:contentDescription="下一周"/>
+        </LinearLayout>
+    </LinearLayout>
+    <FrameLayout android:id="@+id/widget_content" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <ImageView android:id="@+id/widget_grid" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:contentDescription="本周课表，点按打开详情"/>
-        <TextView android:id="@+id/widget_placeholder" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="正在读取本地课表…\n若未显示，请点按打开应用" android:textColor="#586B7E" android:textSize="13sp"/>
+        <TextView android:id="@+id/widget_placeholder" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="正在读取本地课表…\n点按打开应用" android:textColor="#586B7E" android:textSize="11sp"/>
     </FrameLayout>
-    <TextView android:id="@+id/widget_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="本地数据 · 点按查看详情" android:textColor="#586B7E" android:textSize="10sp" android:maxLines="2"/>
+    <TextView android:id="@+id/widget_hint" android:visibility="gone" android:layout_width="match_parent" android:layout_height="12dp" android:gravity="center_vertical" android:includeFontPadding="false" android:text="本地数据 · 点按课表查看详情" android:textColor="#66778A" android:textSize="8sp" android:maxLines="1" android:ellipsize="end"/>
 </LinearLayout>

@@ -1,4 +1,6 @@
-# Verification and feature parity (0.2.0)
+# Historical verification and feature parity (0.2.0)
+
+> This report describes the previously delivered 0.2.0 build. It does not certify the current 0.3.0 source, its OAuth configuration, signing continuity or new native widget modes. Current architecture and verification limitations are tracked in [COMPACT_WIDGET.md](COMPACT_WIDGET.md).
 
 This branch is a tested **partial implementation**, not full platform parity. No real ACORN account, private schedule, transcript, credential or calendar account was used in testing.
 

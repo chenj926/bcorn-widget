@@ -3,6 +3,26 @@ use std::{fs, io::Write, path::Path};
 
 pub const MAX_DATA_BYTES: usize = 8 * 1024 * 1024;
 
+/// The portable backup boundary is separate from the legacy timetable schema.
+/// Only local user data is accepted; credentials and remote ownership are never exported.
+pub fn validate_export_json(value: &Value) -> Result<(), String> {
+    if value.get("format").is_none() && value.get("backupVersion").is_none() { return validate_data(value); }
+    let root = value.as_object().ok_or("Invalid backup object")?;
+    if root.keys().any(|key| !["format", "backupVersion", "createdAt", "timetable", "gradebook", "preferences"].contains(&key.as_str())) { return Err("Unsupported backup field".into()); }
+    if value["format"] != "bcorn-user-backup" || value["backupVersion"] != 1 { return Err("Unsupported backup version".into()); }
+    for key in ["timetable", "gradebook"] {
+        if serde_json::to_vec(&value[key]).map_err(|e| e.to_string())?.len() > 2 * 1024 * 1024 { return Err("Backup section exceeds 2 MiB".into()); }
+    }
+    validate_data(&value["timetable"])?;
+    validate_grade_book(&value["gradebook"])?;
+    let prefs = value["preferences"].as_object().ok_or("Invalid backup preferences")?;
+    for (key, setting) in prefs {
+        let allowed: &[&str] = match key.as_str() { "tab" => &["today", "term", "grades"], "map-provider" => &["google", "amap"], _ => return Err("Unsupported backup preference".into()) };
+        if !setting.as_str().map(|v| allowed.contains(&v)).unwrap_or(false) { return Err("Invalid backup preference".into()); }
+    }
+    Ok(())
+}
+
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or("Missing parent directory")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -139,12 +159,10 @@ pub fn validate_data(data: &Value) -> Result<(), String> {
             if meeting.get("recurrence").and_then(Value::as_str) == Some("once") {
                 let date = required_text(meeting, "date")?;
                 if !valid_date(date)
-                    || date < term["start"].as_str().unwrap()
-                    || date > term["end"].as_str().unwrap()
                     || meeting.get("from").and_then(Value::as_str) != Some(date)
                     || meeting.get("until").and_then(Value::as_str) != Some(date)
                 {
-                    return Err("One-time meeting needs a date within the term and matching bounds".into());
+                    return Err("One-time meeting needs a real date and matching bounds".into());
                 }
             }
             if meeting.get("exdates").is_some() {
@@ -170,10 +188,92 @@ pub fn validate_data(data: &Value) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_grade_book(book: &Value) -> Result<(), String> {
+    if serde_json::to_vec(book).map_err(|e| e.to_string())?.len() > 2 * 1024 * 1024 {
+        return Err("Gradebook exceeds the 2 MiB limit".into());
+    }
+    if book.get("schemaVersion").and_then(Value::as_u64) != Some(1) {
+        return Err("Unsupported gradebook version".into());
+    }
+    let mut course_ids = std::collections::HashSet::new();
+    for course in array(book, "courses", 500)? {
+        if !course_ids.insert(required_text(course, "id")?) {
+            return Err("Duplicate grade course ID".into());
+        }
+        let mut assessment_ids = std::collections::HashSet::new();
+        for assessment in array(course, "assessments", 1000)? {
+            if !assessment_ids.insert(required_text(assessment, "id")?) {
+                return Err("Duplicate assessment ID".into());
+            }
+            required_text(assessment, "title")?;
+            let weight = assessment
+                .get("weight")
+                .and_then(Value::as_f64)
+                .ok_or("Invalid assessment weight")?;
+            if !weight.is_finite() || !(0.0..=1.0).contains(&weight) {
+                return Err("Invalid assessment weight".into());
+            }
+            match assessment.get("status").and_then(Value::as_str) {
+                Some("graded") => {
+                    let score = assessment.get("score").ok_or("Missing score")?;
+                    let ratio = match score.get("mode").and_then(Value::as_str) {
+                        Some("ratio") => score
+                            .get("value")
+                            .and_then(Value::as_f64)
+                            .ok_or("Invalid ratio")?,
+                        Some("points") => {
+                            let earned = score
+                                .get("earned")
+                                .and_then(Value::as_f64)
+                                .ok_or("Invalid earned points")?;
+                            let possible = score
+                                .get("possible")
+                                .and_then(Value::as_f64)
+                                .ok_or("Invalid possible points")?;
+                            if possible <= 0.0 {
+                                return Err("Possible points must be positive".into());
+                            }
+                            earned / possible
+                        }
+                        _ => return Err("Unknown score mode".into()),
+                    };
+                    if !ratio.is_finite() || !(0.0..=1.0).contains(&ratio) {
+                        return Err("Score must be between zero and one".into());
+                    }
+                }
+                Some("ungraded" | "exempt") => {
+                    if assessment
+                        .get("score")
+                        .is_some_and(|score| !score.is_null())
+                    {
+                        return Err("Ungraded or exempt assessment cannot carry a score".into());
+                    }
+                }
+                _ => return Err("Invalid assessment status".into()),
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn portable_backup_export_accepts_envelope_and_legacy_but_no_secret_fields() {
+        let mut backup = json!({"format":"bcorn-user-backup","backupVersion":1,"timetable":{"terms":[]},"gradebook":{"schemaVersion":1,"courses":[]},"preferences":{"tab":"grades","map-provider":"google"}});
+        assert!(validate_export_json(&backup).is_ok());
+        assert!(validate_export_json(&json!({"terms":[]})).is_ok());
+        backup["token"] = json!("synthetic-secret");
+        assert!(validate_export_json(&backup).is_err());
+        backup.as_object_mut().unwrap().remove("token");
+        backup["preferences"]["remoteCalendarId"] = json!("synthetic-owned-id");
+        assert!(validate_export_json(&backup).is_err());
+        backup["preferences"] = json!({});
+        backup["gradebook"]["schemaVersion"] = json!(99);
+        assert!(validate_export_json(&backup).is_err());
+    }
     #[test]
     fn rejects_non_timetable_cache() {
         assert!(validate_data(&json!({"credentials":"not a timetable"})).is_err());
@@ -220,7 +320,12 @@ mod tests {
         let snapshot = data.clone();
         assert!(validate_data(&data).is_ok());
         assert_eq!(data, snapshot);
-        for (key, value) in [("recurrence", "daily"), ("date", "2026-02-30"), ("date", "2027-01-01"), ("from", "2026-10-12"), ("until", "2026-10-26")] {
+        for (key, value) in [
+            ("recurrence", "daily"),
+            ("date", "2026-02-30"),
+            ("from", "2026-10-12"),
+            ("until", "2026-10-26"),
+        ] {
             let mut invalid = data.clone();
             invalid["terms"][0]["meetings"][0][key] = json!(value);
             assert!(validate_data(&invalid).is_err(), "accepted invalid {key}");
@@ -229,8 +334,38 @@ mod tests {
         invalid["terms"][0]["courses"][0]["type"] = json!("unknown");
         assert!(validate_data(&invalid).is_err());
         invalid = data.clone();
-        invalid["terms"][0]["meetings"][0].as_object_mut().unwrap().remove("date");
+        invalid["terms"][0]["meetings"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("date");
         assert!(validate_data(&invalid).is_err());
+    }
+    #[test]
+    fn standalone_once_can_outlive_teaching_bounds() {
+        let data = json!({"terms":[{"id":"term","name":"Term","start":"2026-09-01","end":"2026-12-01","courses":[{"code":"ABC101"}],"meetings":[{"id":"quiz","code":"ABC101","day":2,"start":"09:15","end":"09:30","recurrence":"once","date":"2027-01-05","from":"2027-01-05","until":"2027-01-05"}]}]});
+        assert!(validate_data(&data).is_ok());
+    }
+    #[test]
+    fn gradebook_validation_preserves_fractional_scores_and_rejects_invalid_states() {
+        let book = json!({"schemaVersion":1,"courses":[{"id":"course","title":"Synthetic course","rules":{"kind":"weighted"},"assessments":[{"id":"quiz","title":"Synthetic quiz","weight":0.15,"status":"graded","score":{"mode":"points","earned":8.5,"possible":10}}]}]});
+        let before = book.clone();
+        assert!(validate_grade_book(&book).is_ok());
+        assert_eq!(book, before);
+        for invalid in [
+            json!({"schemaVersion":2,"courses":[]}),
+            json!({"schemaVersion":1,"courses":"bad"}),
+        ] {
+            assert!(validate_grade_book(&invalid).is_err());
+        }
+        let mut invalid = book.clone();
+        invalid["courses"][0]["assessments"][0]["status"] = json!("ungraded");
+        assert!(validate_grade_book(&invalid).is_err());
+        invalid = book.clone();
+        invalid["courses"][0]["assessments"][0]["score"]["possible"] = json!(0);
+        assert!(validate_grade_book(&invalid).is_err());
+        invalid = book.clone();
+        invalid["courses"][0]["assessments"][0]["weight"] = json!(2);
+        assert!(validate_grade_book(&invalid).is_err());
     }
     #[test]
     fn clearing_cache_preserves_window_preferences_and_other_files() {
@@ -241,6 +376,11 @@ mod tests {
         fs::write(directory.join("cache.json.tmp"), b"incomplete").unwrap();
         fs::write(directory.join("window.json"), br#"{"pinned":true}"#).unwrap();
         fs::write(directory.join("unrelated.txt"), b"keep").unwrap();
+        fs::write(
+            directory.join("grades-v1.json"),
+            br#"{"schemaVersion":1,"courses":[]}"#,
+        )
+        .unwrap();
         clear_cache(&directory).unwrap();
         assert!(!directory.join("cache.json").exists());
         assert!(!directory.join("cache.json.tmp").exists());
@@ -249,6 +389,7 @@ mod tests {
             br#"{"pinned":true}"#
         );
         assert_eq!(fs::read(directory.join("unrelated.txt")).unwrap(), b"keep");
+        assert!(directory.join("grades-v1.json").exists());
         clear_cache(&directory).unwrap(); // Missing cache is already cleared.
         fs::write(directory.join("cache.json"), b"last good cache").unwrap();
         fs::create_dir(directory.join("cache.json.tmp")).unwrap();

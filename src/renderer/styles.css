@@ -608,3 +608,93 @@ body:not([data-active-tab="grades"]) .titlebar { min-height: 64px; padding-top: 
 .week[style*="--days:5"] .block b { font-size: 10px; }
 .meeting-detail .detail-date { color: var(--text); font-size: 13px; font-weight: 550; }
 .meeting-detail .detail-next { color: var(--muted); font-size: 11px; margin-top: 5px; }
+
+/* Compact calendar shell. Android reserves system bars natively; CSS adds no second inset. */
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.titlebar, body:not([data-active-tab="grades"]) .titlebar { min-height: 58px; padding: 5px 8px 3px; gap: 0; flex: none; }
+#header-calendar { flex: 1; min-width: 0; }
+.calendar-nav { padding: 0; gap: 0; width: 100%; -webkit-app-region: no-drag; }
+.nav-arrow, .icon-btn { width: 48px; min-width: 48px; height: 48px; min-height: 48px; flex: none; }
+.icon-btn { color: var(--accent); }
+.icon-btn svg { width: 22px; height: 22px; }
+.date-picker { min-height: 48px; padding: 3px 1px; flex: 1; align-items: center; justify-content: center; -webkit-app-region: no-drag; }
+.date-picker b { font-size: 16px; letter-spacing: -.035em; line-height: 1.4; }
+.date-picker-year { font-size: 10px; margin: 1px 0 0; line-height: 1.4; }
+.picker-chevron { padding-left: 3px; font-size: 11px; }
+.calendar-heading { font-weight: 650; font-size: 20px; padding-left: 10px; }
+.calendar-toolbar { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; flex: none; }
+.tabs { display: grid; grid-template-columns: repeat(3, 48px); margin: 0; padding: 2px; border-radius: 11px; gap: 0; flex: none; }
+.tabs button { min-width: 48px; min-height: 48px; font-size: 12px; border-radius: 9px; padding: 0 3px; }
+#term-control { min-width: 0; flex: 1; }
+.term-picker { display: block; min-width: 0; }
+.term-picker select { width: 100%; min-height: 48px; border: 0; color: var(--muted); background: transparent; font: inherit; font-size: 11px; padding: 0 1px; text-overflow: ellipsis; }
+.today-btn { min-width: 48px; min-height: 48px; padding: 0 7px; border-radius: 11px; font-size: 11px; }
+main { padding: 0 10px 18px; min-height: 0; }
+footer { min-height: 26px; padding: 5px 12px; font-size: 10px; flex: none; }
+.week { border-radius: 12px; padding: 5px 3px 12px 0; }
+.week-head, .week-body { grid-template-columns: 24px repeat(7,minmax(0,1fr)); column-gap: 1px; }
+.week-head { margin-bottom: 3px; }
+.week-head > button { min-height: 48px; gap: 2px; }
+.week-head > button b { font-size: 13px; }
+.week-head > button span { font-size: 10px; }
+/* A quarter hour gets a real 24px row; sub-quarter-hour blocks use collision-safe lanes. */
+.week-body { height: calc(var(--hours) * var(--hour-px, 64px)); }
+.day { background-image: repeating-linear-gradient(to bottom,var(--line) 0 1px,transparent 1px var(--hour-px, 64px)); }
+.day.has-annotation { background-color: color-mix(in srgb, #BA9858 9%, var(--card)); }
+.day-annotation { position: absolute; top: 2px; left: 2px; right: 2px; font-size: 8px; line-height: 1.2; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+.block { padding: 3px 2px; background: color-mix(in srgb,var(--event-color) 15%,var(--card)); border-left-color: var(--event-color); color: var(--text); border-radius: 4px; font-size: 10px; }
+.block b { font-size: 10px; letter-spacing: -.025em; line-height: 1.2; margin-bottom: 3px; }
+.block span { font-size: 9px; }
+.block.short-block { display: flex; align-items: center; padding: 2px; }
+.block.short-block b { font-size: 10px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.block.overlap-block b { overflow-wrap: anywhere; }
+.block.overlap-block:not(.short-block) { padding-left: 1px; padding-right: 1px; }
+.block.overlap-block span { overflow: hidden; }
+.block:focus-visible, .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
+.week-agenda { margin-top: 16px; }
+.week-agenda .section-label { margin-bottom: 8px; }
+.week-agenda .slot { min-height: 60px; padding: 10px 12px; }
+.week-agenda .slot-title { font-size: 13px; }
+.annotation-note { font-size: 12px; padding: 10px 12px; margin-bottom: 8px; border-radius: 8px; background: color-mix(in srgb,#BA9858 9%,var(--card)); }
+.annotation-note small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
+.hero::before, .slot-bar, .dot, .progress i { background: var(--event-color, hsl(var(--h) 65% var(--bar-l))); }
+.hero-label { color: var(--event-color, var(--accent)); }
+.tag { background: color-mix(in srgb,var(--event-color, var(--accent)) 12%,var(--card)); color: var(--text); }
+.slot.now { box-shadow: 0 0 0 1.5px var(--event-color); }
+.detail-intro { border-left-color: var(--event-color); }
+.color-picker { border: 0; margin: 6px 0 16px; min-width: 0; }
+.color-picker legend { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.color-options { display: flex; flex-wrap: wrap; gap: 2px; }
+.color-option { width: 48px; height: 48px; display: grid; place-items: center; position: relative; cursor: pointer; }
+.color-option input { appearance: none; -webkit-appearance: none; position: absolute; inset: 1px; border: 2px solid transparent; border-radius: 12px; width: 46px; height: 46px; margin: 0; cursor: pointer; }
+.color-option input:checked { border-color: var(--accent); }
+.color-option input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.color-option > span { width: 25px; height: 25px; background: var(--choice-color); border-radius: 50%; pointer-events: none; }
+.color-auto > span { background: transparent; width: auto; height: auto; font-size: 10px; color: var(--muted); }
+.course-event-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.course-event-actions > button { min-height: 48px; padding: 4px; }
+.detail-footer { flex-wrap: wrap; }
+#context-menu { max-height: calc(100dvh - 16px); overflow-y: auto; }
+#context-menu button, .header-save { min-height: 48px; }
+@media (max-width: 480px) {
+  .editor-dialog .dialog-head { padding-top: 8px; }
+  .editor-dialog .dialog-body { padding-bottom: 30px; }
+}
+@media (max-width: 370px) {
+  .calendar-toolbar { padding-left: 10px; padding-right: 10px; gap: 5px; }
+  .date-picker b { font-size: 14px; }
+  .date-picker-year { font-size: 9px; }
+  #dialog-content { padding: 0; }
+  .hours small { display: none; }
+}
+
+.calendar-source { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; user-select: text; margin: 8px 0 12px; }
+.calendar-preset .secondary-btn { min-height: 48px; width: 100%; margin-bottom: 8px; }
+
+/* Course identity and destination are paired, never hidden in one ellipsized subtitle. */
+.slot-name { font-size: 14px; font-weight: 550; line-height: 1.4; margin-top: 3px; overflow-wrap: anywhere; }
+.slot-place { font-size: 14px; font-weight: 650; line-height: 1.4; margin-top: 5px; color: var(--text); overflow-wrap: anywhere; }
+.hero-title { font-size: 15px; line-height: 1.4; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.hero-meta { font-size: 14px; font-weight: 600; }
+.week-agenda .slot-name, .week-agenda .slot-place { font-size: 14px; }

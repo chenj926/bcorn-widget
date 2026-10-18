@@ -42,7 +42,7 @@ public class NativeBackPolicyTest {
     ShadowSystemClock.advanceBy(Duration.ofSeconds(1));
     controller=Robolectric.buildActivity(MainActivity.class).create().start().resume();
     activity=controller.get();
-    WebView webView=(WebView)((ViewGroup)activity.findViewById(android.R.id.content)).getChildAt(0);
+    WebView webView=activity.findViewById(R.id.web_content);
     web=Shadows.shadowOf(webView);
   }
   @After public void cleanup() { if(!activity.isDestroyed()) controller.pause().stop().destroy(); }

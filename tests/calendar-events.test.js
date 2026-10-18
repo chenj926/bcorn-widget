@@ -24,12 +24,12 @@ test('one-off validation rejects missing or impossible dates and unknown recurre
   assert.equal(tools.validateImport(data).ok,false, key+String(value));
  }
 });
-test('once date sets weekday, respects exclusions and term bounds', () => {
+test('once date sets weekday and respects exclusions independently of teaching bounds', () => {
  const data=fixture(); data.terms[0].meetings[0].day=1;
  const term=tools.validateImport(data).data.terms[0], event=term.meetings[0];
  assert.equal(event.day,7);
  event.exdates=['2026-10-18']; assert.deepEqual(tools.occurrenceDates(term,event),[]);
- event.exdates=[]; term.end='2026-10-17'; assert.deepEqual(tools.occurrenceDates(term,event),[]);
+ event.exdates=[]; term.end='2026-10-17'; assert.deepEqual(tools.occurrenceDates(term,event),['2026-10-18']);
 });
 test('weekly events use actual week boundaries and exclude cancelled occurrences', () => {
  const data=fixture(), event=data.terms[0].meetings[0]; event.recurrence='weekly'; delete event.date; event.from='2026-10-01'; event.until='2026-10-31'; event.exdates=['2026-10-18'];

@@ -143,7 +143,7 @@ const fixture = {source:'local',terms:[{id:'synthetic',name:'Synthetic autumn',s
   await page.evaluate(()=>window.acornHandleBack());
   // Editor titles and primary controls remain visible with a phone-sized viewport.
   await page.click('[data-tab="term"]');
-  await page.locator('[data-term="synthetic"]').click();
+  await page.selectOption('#calendar-term','synthetic');
   if(await page.locator('[data-action="toggle-course-list"]').getAttribute('aria-expanded')==='false') await page.click('[data-action="toggle-course-list"]');
   await page.locator('.course-open[data-course="SYN101"]').click();await page.click('[data-action="edit-course"]');
   assert.equal(await page.locator('.meeting-fields[open]').count(),0,'existing meetings start as compact accordions');
@@ -159,8 +159,8 @@ const fixture = {source:'local',terms:[{id:'synthetic',name:'Synthetic autumn',s
     await page.setViewportSize(viewport);
     await page.evaluate(()=>document.querySelector('#view').scrollTop=0);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`document overflow at ${viewport.width}`);
-    const targets=await page.locator('.nav-arrow, .today-btn, .tabs button, .add-inline, .course-list-toggle').evaluateAll(nodes=>nodes.map(el=>({name:el.textContent.trim(),width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})));
-    for(const target of targets) assert.ok(target.width>=44&&target.height>=44,`touch target too small: ${JSON.stringify(target)}`);
+    const targets=await page.locator('.nav-arrow, .today-btn:visible, .tabs button, .add-inline, .course-list-toggle, #btn-add, [data-action="menu"]').evaluateAll(nodes=>nodes.map(el=>({name:el.textContent.trim(),width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})));
+    for(const target of targets) assert.ok(target.width>=48&&target.height>=48,`touch target too small: ${JSON.stringify(target)}`);
     await fs.mkdir('/tmp/bcorn-mobile-qa',{recursive:true});
     await page.screenshot({path:`/tmp/bcorn-mobile-qa/week-${viewport.width}.png`});
   }
@@ -168,7 +168,7 @@ const fixture = {source:'local',terms:[{id:'synthetic',name:'Synthetic autumn',s
   await page.evaluate(()=>{
     window.__focusedPicker=document.querySelector('#calendar-date');window.__focusedPicker.focus();
     window.__pickerRenders=0;window.__pickerObserver=new MutationObserver(()=>window.__pickerRenders++);
-    window.__pickerObserver.observe(document.querySelector('#view'),{childList:true});
+    window.__pickerObserver.observe(document.querySelector('#header-calendar'),{childList:true});
   });
   await page.clock.runFor(61000);
   assert.equal(await page.evaluate(()=>document.querySelector('#calendar-date')===window.__focusedPicker),true);

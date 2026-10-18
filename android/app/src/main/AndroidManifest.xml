@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Deliberately no INTERNET, storage, calendar, alarm or service permissions. -->
+    <!-- Network is used only by explicitly connected foreground grade sync; no background service. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
     <application android:allowBackup="false" android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="bcorn" android:icon="@drawable/ic_acorn" android:theme="@style/AppTheme"
         android:enableOnBackInvokedCallback="true" android:usesCleartextTraffic="false" android:supportsRtl="true">
+        <!-- Enable only after registering the actual package/signing identity and Sheets API. -->
+        <meta-data android:name="com.acorn.widget.GRADE_SYNC_CONFIGURED" android:value="false"/>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>

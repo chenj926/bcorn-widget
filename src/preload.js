@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('acorn', {
+  loadGradeBook: () => ipcRenderer.invoke('grades:load'),
+  saveGradeBook: (book) => ipcRenderer.invoke('grades:save', book),
   clearData: () => ipcRenderer.invoke('data:clear'),
   saveData: (data) => ipcRenderer.invoke('data:save', data),
   importData: () => ipcRenderer.invoke('data:import'),

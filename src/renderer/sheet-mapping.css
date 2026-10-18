@@ -1,0 +1,18 @@
+.sheet-mapping { min-width: 0; padding: 12px; }
+.sheet-mapping button, .sheet-mapping input, .sheet-mapping select { min-height: 48px; max-width: 100%; box-sizing: border-box; }
+.sm-row { min-width: 0; margin: 12px 0; }
+.sm-row label { display: grid; gap: 4px; min-width: 0; }
+.sm-row input, .sm-row select { width: 100%; }
+.sm-preview { overflow: auto; max-height: 240px; }
+.sm-preview table { border-collapse: collapse; width: 100%; }
+.sm-preview th, .sm-preview td { padding: 6px; text-align: left; overflow-wrap: anywhere; }
+.sm-message { overflow-wrap: anywhere; }
+.gb-mapping-dialog { box-sizing: border-box; width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; border-radius: 12px; padding: 12px; }
+.gb-mapping-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+
+.sm-row > summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; overflow-wrap: anywhere; }
+.sm-row-fields, .sm-course { display: grid; gap: 8px; }
+.sm-course label { display: grid; gap: 4px; }
+.sm-row-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sm-row-fields > label:first-child { grid-column: 1 / -1; }
+@media (max-width: 340px) { .sm-row-fields { grid-template-columns: 1fr; } }

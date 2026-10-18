@@ -10,6 +10,7 @@
   const DAY_MS = 86400000;
   const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
   const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const COLOR = /^#[0-9a-fA-F]{6}$/;
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const pad = value => String(value).padStart(2, '0');
   function utf8Length(value) {
@@ -72,6 +73,11 @@
       if (value.length > limit) { fail(path, 'has too many entries (maximum ' + limit + ')'); return []; }
       return value;
     }
+    function color(source, target, path) {
+      if (source.color === undefined || source.color === null || source.color === '') return;
+      if (typeof source.color !== 'string' || !COLOR.test(source.color)) fail(path + '.color', 'must be a six-digit hex color, e.g. #436B95');
+      else target.color = source.color.toUpperCase();
+    }
     function optionalStrings(source, target, fields, path) {
       for (const field of fields) if (source[field] !== undefined && source[field] !== null) target[field] = str(source[field], path + '.' + field);
     }
@@ -110,6 +116,20 @@
         if (!Array.isArray(source.bounds) || source.bounds.length !== 2 || !source.bounds.every(validDate) || source.bounds[0] > source.bounds[1]) fail(p + '.bounds', 'must be an ordered pair of real YYYY-MM-DD dates');
         else term.bounds = source.bounds.slice();
       }
+      if (source.holidays !== undefined) {
+        const holidayIds = new Set();
+        term.holidays = list(source.holidays, p + '.holidays', 1000).map((h, hi) => {
+          const hp = p + '.holidays[' + hi + ']';
+          if (!object(h)) { fail(hp, 'must be an object'); return null; }
+          const holiday = { id: str(h.id, hp + '.id', '', true), title: str(h.title, hp + '.title', '', true), start: date(h.start, hp + '.start', null), end: date(h.end, hp + '.end', null), kind: h.kind };
+          if (holidayIds.has(holiday.id)) fail(hp + '.id', 'duplicate annotation id');
+          holidayIds.add(holiday.id);
+          if (!holiday.start || !holiday.end || holiday.start > holiday.end) fail(hp, 'requires an ordered date range');
+          if (!['holiday', 'school-break'].includes(holiday.kind)) fail(hp + '.kind', 'must be holiday or school-break');
+          optionalStrings(h, holiday, ['source'], hp);
+          return holiday;
+        }).filter(Boolean);
+      }
       const codes = new Set();
       list(source.courses, p + '.courses', 1000).forEach((c, ci) => {
         const cp = p + '.courses[' + ci + ']';
@@ -126,6 +146,7 @@
           if (!['course', 'event'].includes(c.type)) fail(cp + '.type', 'must be course or event');
           else course.type = c.type;
         }
+        color(c, course, cp);
         optionalStrings(c, course, ['status', 'room', 'address', 'building', 'location', 'delivery'], cp);
         term.courses.push(course);
       });
@@ -141,13 +162,13 @@
         if (m.date !== undefined) meeting.date = date(m.date, mp + '.date', null);
         if (m.recurrence === 'once') {
           if (!meeting.date) fail(mp + '.date', 'one-off events require a real date');
-          else if (meeting.date < term.start || meeting.date > term.end) fail(mp + '.date', 'one-off date must fall within this calendar’s date range');
           else {
             meeting.from = meeting.date;
             meeting.until = meeting.date;
             meeting.day = ((new Date(meeting.date + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1;
           }
         }
+        color(m, meeting, mp);
         optionalStrings(m, meeting, ['id', 'room', 'address', 'building', 'delivery', 'status'], mp);
         if (meeting.id) {
           if (ids.has(meeting.id)) fail(mp + '.id', 'duplicate meeting id within term');
@@ -218,10 +239,11 @@
     return addDays(date, -((new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7));
   }
   function occursOn(term, meeting, date) {
-    if (!validDate(date) || date < term.start || date > term.end ||
-        (meeting.from && date < meeting.from) || (meeting.until && date > meeting.until) ||
-        (meeting.exdates || []).includes(date)) return false;
+    if (!validDate(date) || (meeting.exdates || []).includes(date)) return false;
+    // A one-off belongs to its explicit civil date, not its parent course's teaching range.
     if (meeting.recurrence === 'once') return date === meeting.date;
+    if (date < term.start || date > term.end ||
+        (meeting.from && date < meeting.from) || (meeting.until && date > meeting.until)) return false;
     return meeting.day === ((new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1;
   }
   function occurrenceDates(term, meeting) {
@@ -233,6 +255,62 @@
     const excluded = new Set(meeting.exdates || []), dates = [];
     for (let d = addDays(start, (meeting.day - weekday + 7) % 7); d <= end; d = addDays(d, 7)) if (!excluded.has(d)) dates.push(d);
     return dates;
+  }
+  // These operations own identity and validation. Callers replace the returned term once;
+  // they never splice sibling meetings, widen teaching bounds, or renumber event IDs.
+  function upsertCourseEvent(term, courseCode, draft, id) {
+    if (!object(term) || !object(draft)) throw new Error('请填写日程信息。');
+    const course = (term.courses || []).find(c => c.code === courseCode);
+    if (!course || course.type === 'event') throw new Error('请选择这次日程所属的课程。');
+    const existing = id == null ? null : (term.meetings || []).find(m => m.id === id && m.code === courseCode && m.recurrence === 'once');
+    if (id != null && !existing) throw new Error('这次日程已不存在，请重新打开课程。');
+    if (typeof draft.title !== 'string' || !draft.title.trim()) throw new Error('请填写日程标题。');
+    if (!validDate(draft.date)) throw new Error('请选择有效日期。');
+    if (!TIME.test(draft.start) || !TIME.test(draft.end) || draft.end <= draft.start) throw new Error('结束时间需要晚于开始时间。');
+    let eventId = existing?.id;
+    if (!eventId) {
+      do { eventId = 'event-' + (globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)); }
+      while ((term.meetings || []).some(m => m.id === eventId));
+    }
+    const event = { ...(existing || {}), id: eventId, code: courseCode, title: draft.title.trim(), kind: 'EVENT', section: '', recurrence: 'once', date: draft.date, day: 1, start: draft.start, end: draft.end, from: draft.date, until: draft.date, exdates: [] };
+    for (const key of ['room', 'address', 'location', 'color']) if (draft[key] !== undefined) event[key] = draft[key];
+    const candidate = { ...term, meetings: existing ? term.meetings.map(m => m === existing ? event : m) : [...(term.meetings || []), event] };
+    const checked = validateImport({ terms: [candidate] });
+    if (!checked.ok) throw new Error(checked.errors.join('\n'));
+    const result = checked.data.terms[0];
+    return { term: result, event: result.meetings.find(m => m.id === eventId) };
+  }
+  function removeCourseEvent(term, courseCode, id) {
+    const event = (term?.meetings || []).find(m => m.id === id && m.code === courseCode && m.recurrence === 'once');
+    if (!event || !id) throw new Error('这次日程已不存在，请重新打开课程。');
+    return { ...term, meetings: term.meetings.filter(m => m !== event) };
+  }
+  const ENGINEERING_SOURCE = 'https://engineering.calendar.utoronto.ca/sessional-dates';
+  const ENGINEERING_PRESET = 'uoft-engineering-undergrad-2026-27';
+  function getCalendarPresets() {
+    return [{ id: ENGINEERING_PRESET, title: 'U of T Engineering 本科 · 2026–27', source: ENGINEERING_SOURCE, verifiedOn: '2026-10-18', description: '仅假期背景提示，不自动停课；不适用于所有学院或研究生。' }];
+  }
+  function applyCalendarPreset(term, presetId, enabled = true) {
+    if (presetId !== ENGINEERING_PRESET) throw new Error('请选择支持的校历。');
+    const prefix = presetId + ':';
+    const holidays = (term.holidays || []).filter(h => !h.id.startsWith(prefix));
+    if (enabled) {
+      const dates = [
+        ['labour', 'Labour Day · 大学关闭', '2026-09-07', '2026-09-07', 'holiday'],
+        ['thanksgiving', 'Thanksgiving · 大学关闭', '2026-10-12', '2026-10-12', 'holiday'],
+        ['fall-break', 'Engineering 秋季 Study Break', '2026-10-26', '2026-10-30', 'school-break'],
+        ['winter-closure', '大学冬季关闭', '2026-12-24', '2027-01-05', 'holiday'],
+        ['family', 'Family Day · 大学关闭', '2027-02-15', '2027-02-15', 'holiday'],
+        ['winter-break', 'Engineering 冬季 Study Break', '2027-02-15', '2027-02-19', 'school-break'],
+        ['good-friday', 'Good Friday · 大学关闭', '2027-03-26', '2027-03-26', 'holiday']
+      ];
+      holidays.push(...dates.map(([id, title, start, end, kind]) => ({ id: prefix + id, title, start, end, kind, source: ENGINEERING_SOURCE })));
+    }
+    return { ...term, holidays };
+  }
+  function getDateAnnotations(term, date) {
+    if (!validDate(date)) return [];
+    return (term?.holidays || []).filter(h => h.start <= date && date <= h.end).map(h => ({ ...h }));
   }
   function timezoneFormatter(timezone) {
     return new Intl.DateTimeFormat('en-GB-u-ca-gregory-nu-latn', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
@@ -320,5 +398,5 @@
     const query = encodeURIComponent(place.trim());
     return options.provider === 'google' ? 'https://www.google.com/maps/search/?api=1&query=' + query : 'https://uri.amap.com/search?keyword=' + query + '&src=bcorn-widget&callnative=0';
   }
-  return Object.freeze({ DEFAULT_TIMEZONE, MAX_IMPORT_BYTES, validDate, addDays, weekStart, occursOn, validateImport, isWaitlisted, getExportableMeetings, occurrenceDates, localToUtc, exportICS, buildMapUrl, escapeICSText, foldICSLine });
+  return Object.freeze({ DEFAULT_TIMEZONE, MAX_IMPORT_BYTES, getCalendarPresets, applyCalendarPreset, upsertCourseEvent, removeCourseEvent, getDateAnnotations, validDate, addDays, weekStart, occursOn, validateImport, isWaitlisted, getExportableMeetings, occurrenceDates, localToUtc, exportICS, buildMapUrl, escapeICSText, foldICSLine });
 }));

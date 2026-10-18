@@ -61,3 +61,11 @@ test('empty startup is offline and explicit local clear removes only timetable c
  assert.deepEqual(host.counts.removed,['/synthetic-only/cache.bin']);
  assert.equal(host.counts.fetch,0);
 });
+
+test('desktop export accepts the portable backup envelope without dropping assessment grades',async()=>{
+ const host=boot();await Promise.resolve();
+ const backup=require('../src/shared/user-backup').create({terms:[]},{schemaVersion:1,courses:[]},{tab:'grades'});
+ const result=await host.handlers.get('calendar:export')(null,{filename:'backup.json',content:JSON.stringify(backup)});
+ assert.equal(result.canceled,true);
+ await assert.rejects(host.handlers.get('calendar:export')(null,{filename:'backup.json',content:JSON.stringify({...backup,gradebook:{schemaVersion:99,courses:[]}})}));
+});

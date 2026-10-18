@@ -1,6 +1,6 @@
 [package]
 name = "acorn-widget-lite"
-version = "0.2.0"
+version = "0.3.0"
 description = "Offline-first ACORN timetable desktop shell"
 authors = ["ACORN Widget contributors"]
 edition = "2021"
@@ -15,6 +15,17 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+sha2 = "0.10"
+subtle = "2.6"
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+url = "2"
+zeroize = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem"] }
 
 [profile.release]
 panic = "abort"

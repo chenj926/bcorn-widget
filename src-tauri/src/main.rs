@@ -2,10 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{fs, sync::Mutex};
+use std::{fs, sync::{Arc, Mutex}};
 
 mod data;
-use data::{atomic_write, clear_cache, validate_data, MAX_DATA_BYTES};
+mod grade_auth;
+mod cloud_calendar;
+mod grade_sync_store;
+use grade_auth::{GradeAuth, GradeSyncStatus, SheetsRequest, SheetsResponse, SheetVersion, DisconnectResult};
+use grade_sync_store::GradeSyncStore;
+use data::{atomic_write, clear_cache, validate_data, validate_grade_book, validate_export_json, MAX_DATA_BYTES};
 use tauri::{
     menu::{Menu, MenuItem},
     Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow,
@@ -85,6 +90,153 @@ fn save_data(
     app.emit("acorn:update", &payload)
         .map_err(|e| e.to_string())?;
     Ok(payload)
+}
+
+#[tauri::command]
+fn load_grade_book(app: tauri::AppHandle) -> Result<Option<Value>, String> {
+    let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("grades-v1.json");
+    let metadata = match fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    if metadata.len() > 2 * 1024 * 1024 { return Err("Gradebook exceeds the 2 MiB limit".into()); }
+    let book: Value = serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    validate_grade_book(&book)?;
+    Ok(Some(book))
+}
+#[tauri::command]
+fn save_grade_book(app: tauri::AppHandle, state: tauri::State<'_, AppState>, book: Value) -> Result<Value, String> {
+    validate_grade_book(&book)?;
+    // Serialize file replacement with other host writes, including repeated UI saves.
+    let _guard = state.0.lock().map_err(|e| e.to_string())?;
+    let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("grades-v1.json");
+    atomic_write(&path, &serde_json::to_vec(&book).map_err(|e| e.to_string())?)?;
+    Ok(json!({"ok": true}))
+}
+
+// Calendar credentials and permissions are separate from the grade-file grant.
+struct CloudCalendarState(Result<Arc<cloud_calendar::CloudCalendar>, String>);
+#[derive(Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+enum CloudCalendarRequest {
+    Status { provider: cloud_calendar::Provider },
+    Connect { provider: cloud_calendar::Provider },
+    Targets { provider: cloud_calendar::Provider },
+    CreateTarget { provider: cloud_calendar::Provider, name: String },
+    Bind { provider: cloud_calendar::Provider, #[serde(rename = "calendarId")] calendar_id: String, confirmed: bool },
+    Sync { provider: cloud_calendar::Provider, series: Vec<cloud_calendar::Series>, #[serde(rename = "allowDelete")] allow_delete: bool },
+    Disconnect { provider: cloud_calendar::Provider },
+    Cancel { provider: cloud_calendar::Provider },
+    SetForeground { foreground: bool },
+}
+#[tauri::command]
+async fn cloud_calendar_call(app: tauri::AppHandle, window: WebviewWindow, state: tauri::State<'_, CloudCalendarState>, request: CloudCalendarRequest) -> Result<Value, String> {
+    let calendar = match &state.0 {
+        Ok(calendar) => calendar.clone(),
+        Err(_) => return if matches!(request, CloudCalendarRequest::Status { .. }) {
+            Ok(json!({"state":"storage-unavailable","enabled":false,"accountLabel":"","target":null,"nativeError":"calendar-storage-unavailable"}))
+        } else { Err("calendar-storage-unavailable".into()) },
+    };
+    if let CloudCalendarRequest::SetForeground { foreground } = request {
+        calendar.set_foreground(foreground && window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true));
+        return Ok(json!({"ok":true}));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let encode = |value| serde_json::to_value(value).map_err(|_| "calendar-response-error".to_string());
+        match request {
+            CloudCalendarRequest::Status { provider } => encode(calendar.status(provider)?),
+            CloudCalendarRequest::Connect { provider } => encode(calendar.connect(provider, |url| app.opener().open_url(url, None::<&str>).map_err(|_| "system-browser-unavailable".to_string()))?),
+            CloudCalendarRequest::Targets { provider } => serde_json::to_value(calendar.targets(provider)?).map_err(|_| "calendar-response-error".into()),
+            CloudCalendarRequest::CreateTarget { provider, name } => serde_json::to_value(calendar.create_target(provider, name)?).map_err(|_| "calendar-response-error".into()),
+            CloudCalendarRequest::Bind { provider, calendar_id, confirmed } => encode(calendar.bind(provider, calendar_id, confirmed)?),
+            CloudCalendarRequest::Sync { provider, series, allow_delete } => serde_json::to_value(calendar.sync(provider, series, allow_delete)?).map_err(|_| "calendar-response-error".into()),
+            CloudCalendarRequest::Disconnect { provider } => encode(calendar.disconnect(provider)?),
+            CloudCalendarRequest::Cancel { provider } => { calendar.cancel(provider); Ok(json!({"ok":true})) },
+            CloudCalendarRequest::SetForeground { .. } => unreachable!(),
+        }
+    }).await.map_err(|_| "calendar-task-failed".to_string())?
+}
+
+// Native OAuth tokens and HTTP stay behind this narrow command boundary.
+struct GradeState { auth: Result<Arc<GradeAuth>, String>, journal: Arc<GradeSyncStore> }
+impl GradeState {
+    fn auth(&self) -> Result<Arc<GradeAuth>, String> { self.auth.clone() }
+}
+#[tauri::command]
+fn get_grade_sync_status(state: tauri::State<'_, GradeState>) -> Result<Value, String> {
+    match state.auth() {
+        Ok(auth) => serde_json::to_value(auth.status()?).map_err(|_| "native-status-error".into()),
+        Err(error) => Ok(json!({"state":"error","binding":null,"connectionId":null,"deviceId":null,"automaticInbound":false,"automaticInboundMode":"none","foregroundSyncAvailable":false,"nativeError":error})),
+    }
+}
+#[tauri::command]
+async fn connect_grade_sheet(app: tauri::AppHandle, state: tauri::State<'_, GradeState>, title: String, tab: String) -> Result<GradeSyncStatus, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.connect_new_sheet(title, tab, |url| app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string()))).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn create_mapped_grade_sheet(app: tauri::AppHandle, state: tauri::State<'_, GradeState>, course: Value) -> Result<GradeSyncStatus, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.create_mapped_grade_sheet(course, |url| app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string()))).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn pick_grade_sheet(app: tauri::AppHandle, state: tauri::State<'_, GradeState>) -> Result<Value, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.pick_grade_sheet(|url| app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string()))).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn preview_grade_sheet(state: tauri::State<'_, GradeState>, selection_id: String, sheet_id: u32) -> Result<Value, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.preview_grade_sheet(selection_id, sheet_id)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn confirm_grade_sheet_mapping(state: tauri::State<'_, GradeState>, selection_id: String, mapping: Value) -> Result<GradeSyncStatus, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.confirm_grade_sheet_mapping(selection_id, mapping)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn read_mapped_grade_snapshot(state: tauri::State<'_, GradeState>, connection_id: String) -> Result<Value, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.read_mapped_grade_snapshot(connection_id)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn commit_mapped_grade_cells(state: tauri::State<'_, GradeState>, connection_id: String, expected_snapshot: Value, writes: Value) -> Result<Value, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.commit_mapped_grade_cells(connection_id, expected_snapshot, writes)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn grade_sheets_request(state: tauri::State<'_, GradeState>, request: SheetsRequest) -> Result<SheetsResponse, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.request(request)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn grade_sheet_version(state: tauri::State<'_, GradeState>) -> Result<SheetVersion, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.sheet_version()).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn disconnect_grade_sheet(state: tauri::State<'_, GradeState>, revoke_google: bool) -> Result<DisconnectResult, String> {
+    let auth = state.auth()?;
+    tauri::async_runtime::spawn_blocking(move || auth.disconnect(revoke_google)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn set_grade_sync_foreground(window: WebviewWindow, state: tauri::State<'_, GradeState>, foreground: bool) -> Result<(), String> {
+    state.auth()?.set_foreground(foreground && window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true));
+    Ok(())
+}
+#[tauri::command]
+fn cancel_grade_authorization(state: tauri::State<'_, GradeState>) { if let Ok(auth) = state.auth() { auth.cancel_authorization(); } }
+#[tauri::command]
+fn load_grade_sync_state(state: tauri::State<'_, GradeState>, connection_id: String) -> Result<Option<Value>, String> {
+    state.auth()?.validate_connection(&connection_id)?;
+    state.journal.load(&connection_id)
+}
+#[tauri::command]
+fn save_grade_sync_state(state: tauri::State<'_, GradeState>, connection_id: String, envelope: Value) -> Result<Value, String> {
+    state.auth()?.validate_connection(&connection_id)?;
+    state.journal.save(&connection_id, envelope)?;
+    Ok(json!({"ok": true}))
 }
 
 #[tauri::command]
@@ -170,7 +322,7 @@ async fn export_calendar(
     let is_json = filename.to_ascii_lowercase().ends_with(".json");
     if is_json {
         let data: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        validate_data(&data)?;
+        validate_export_json(&data)?;
     } else if !content.starts_with("BEGIN:VCALENDAR") || !content.contains("END:VCALENDAR") {
         return Err("Expected an iCalendar or timetable JSON file".into());
     }
@@ -233,6 +385,11 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let directory = app.path().app_data_dir()?;
+            app.manage(CloudCalendarState(cloud_calendar::CloudCalendar::new(directory.clone()).map(Arc::new)));
+            app.manage(GradeState {
+                auth: GradeAuth::new(directory.clone()).map(Arc::new),
+                journal: Arc::new(GradeSyncStore::new(directory.clone())),
+            });
             let preferences: Preferences = fs::read(directory.join("window.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice(&bytes).ok())
@@ -313,6 +470,27 @@ fn main() {
             }
         })
         .on_window_event(|window, event| {
+            if let Some(state) = window.app_handle().try_state::<CloudCalendarState>() {
+                if let Ok(calendar) = &state.0 {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
+                        calendar.set_foreground(false);
+                    } else if matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)) {
+                        calendar.set_foreground(window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true));
+                    }
+                }
+            }
+            if let Some(state) = window.app_handle().try_state::<GradeState>() {
+                if let Ok(auth) = state.auth() {
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
+                        auth.set_foreground(false);
+                        auth.cancel_authorization();
+                    } else if matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)) {
+                        let visible = window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true);
+                        auth.set_foreground(visible);
+                        if !visible { auth.cancel_authorization(); }
+                    }
+                }
+            }
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 let app = window.app_handle();
                 let state = app.state::<AppState>();
@@ -336,10 +514,28 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            cloud_calendar_call,
+            set_grade_sync_foreground,
+            get_grade_sync_status,
+            connect_grade_sheet,
+            create_mapped_grade_sheet,
+            pick_grade_sheet,
+            preview_grade_sheet,
+            confirm_grade_sheet_mapping,
+            read_mapped_grade_snapshot,
+            commit_mapped_grade_cells,
+            grade_sheets_request,
+            grade_sheet_version,
+            disconnect_grade_sheet,
+            cancel_grade_authorization,
+            load_grade_sync_state,
+            save_grade_sync_state,
             get_state,
             refresh,
             login,
             save_data,
+            load_grade_book,
+            save_grade_book,
             clear_data,
             toggle_pin,
             minimize,
