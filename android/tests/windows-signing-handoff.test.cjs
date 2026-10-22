@@ -20,7 +20,7 @@ test('verified immutable private snapshot precedes any key creation', () => {
   assert.ok(checked > 0 && checked < create);
   assert.match(ps, /\(Hash \$snapshot\) -ne \$metadata.sha256/);
   assert.match(ps, /application-debuggable/);
-  assert.match(ps, /versionCode='4' versionName='0\\.3\\.1'/);
+  assert.match(ps, /versionCode='5' versionName='0\\.3\\.2'/);
   assert.match(ps, /Run \$zipalign @\('-p', '4', \$snapshot, \$aligned\)/);
 });
 test('keys and backups require distinct regular files and private persistent storage', () => {
@@ -41,4 +41,13 @@ test('dangling reparse entries checked before keytool can create a key', () => {
   assert.match(ps, /Get-ChildItem -LiteralPath \$parent -Force/);
   assert.match(ps, /\$key = SafePath \(Join-Path \$keyDir/);
   assert.match(ps, /\$backup = SafePath \(Join-Path \$backupDir/);
+});
+
+test('Windows -File entrypoint resolves metadata after binding, not in parameter default', () => {
+  assert.match(ps, /param\(\[string\]\$MetadataPath,/);
+  assert.doesNotMatch(ps.split('Set-StrictMode')[0], /Join-Path|\$PSScriptRoot/);
+  assert.match(ps, /\$ScriptDirectory = \$PSScriptRoot/);
+  assert.match(ps, /Split-Path -Parent \$MyInvocation.MyCommand.Path/);
+  assert.match(ps, /\$MetadataPath = Join-Path \$ScriptDirectory 'release-metadata.json'/);
+  assert.ok(ps.indexOf("if ($ValidateOnly)") < ps.indexOf("$keyDir = PrivateDirectory"));
 });

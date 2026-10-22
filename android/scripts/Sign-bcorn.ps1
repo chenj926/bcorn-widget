@@ -1,10 +1,19 @@
-# Requires Windows PowerShell 5.1 or newer. Passwords go only to native tools.
+﻿# Requires Windows PowerShell 5.1 or newer. Passwords go only to native tools.
 [CmdletBinding()]
-param([string]$MetadataPath = (Join-Path $PSScriptRoot 'release-metadata.json'),
+param([string]$MetadataPath,
       [string]$BuildToolsPath, [switch]$ValidateOnly)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $stage = $null
+# Resolve after parameter binding: Windows PowerShell -File may not initialize
+# PSScriptRoot while evaluating a parameter default (PowerShell issue #4688).
+$ScriptDirectory = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($ScriptDirectory)) {
+    $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ([string]::IsNullOrWhiteSpace($MetadataPath)) {
+    $MetadataPath = Join-Path $ScriptDirectory 'release-metadata.json'
+}
 function Fail([string]$Message) { throw $Message }
 function Run([string]$Exe, [string[]]$Arguments) {
     & $Exe @Arguments
@@ -42,7 +51,7 @@ function SafePath([string]$Path) {
 }
 function PrivateDirectory([string]$Path) {
     $full = SafePath $Path
-    foreach ($forbidden in @($PSScriptRoot, [IO.Path]::GetTempPath())) {
+    foreach ($forbidden in @($ScriptDirectory, [IO.Path]::GetTempPath())) {
         if (Inside $full $forbidden) { Fail 'Signing storage must be outside the package and temporary folders.' }
     }
     # Also reject any ancestor repository, including a source checkout launch.
@@ -108,8 +117,8 @@ function SingleFile([string]$Path) {
 }
 function CheckApk([string]$Path) {
     $badging = Capture $aapt @('dump', 'badging', $Path)
-    if ($badging -notmatch "(?m)^package: name='com\.bcorn\.widget' versionCode='4' versionName='0\.3\.1'" -or $badging -match 'application-debuggable') {
-        Fail 'APK must be non-debuggable com.bcorn.widget version 0.3.1 (4). No key was created for an invalid APK.'
+    if ($badging -notmatch "(?m)^package: name='com\.bcorn\.widget' versionCode='5' versionName='0\.3\.2'" -or $badging -match 'application-debuggable') {
+        Fail 'APK must be non-debuggable com.bcorn.widget version 0.3.2 (5). No key was created for an invalid APK.'
     }
 }
 try {
@@ -117,7 +126,7 @@ try {
     if ([Console]::IsInputRedirected) { Fail 'Open an interactive terminal; do not pipe input or passwords.' }
     $metadataFull = SafePath $MetadataPath
     $metadata = Get-Content -LiteralPath $metadataFull -Raw | ConvertFrom-Json
-    if ($metadata.package -ne 'com.bcorn.widget' -or $metadata.versionName -ne '0.3.1' -or $metadata.versionCode -ne 4 -or $metadata.sha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail 'Invalid release metadata.' }
+    if ($metadata.package -ne 'com.bcorn.widget' -or $metadata.versionName -ne '0.3.2' -or $metadata.versionCode -ne 5 -or $metadata.sha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail 'Invalid release metadata.' }
     if ([IO.Path]::GetFileName($metadata.apk) -ne $metadata.apk -or $metadata.apk -notmatch '\.apk$') { Fail 'Metadata must name an APK in this package folder.' }
     $source = SafePath (Join-Path ([IO.Path]::GetDirectoryName($metadataFull)) $metadata.apk)
     $null = SingleFile $source
@@ -194,7 +203,7 @@ try {
     if (($primaryInfo.Volume -eq $backupInfo.Volume -and $primaryInfo.IndexHigh -eq $backupInfo.IndexHigh -and $primaryInfo.IndexLow -eq $backupInfo.IndexLow) -or (Hash $key) -ne (Hash $backup)) { Fail 'Encrypted key backup verification failed.' }
     Write-Host 'Two distinct matching encrypted files verified. This does not prove long-term backup durability.'
     $aligned = Join-Path $stage 'aligned.apk'
-    $signed = Join-Path $stage 'bcorn-0.3.1-signed.apk'
+    $signed = Join-Path $stage 'bcorn-0.3.2-signed.apk'
     Run $zipalign @('-p', '4', $snapshot, $aligned)
     Run $java @('-jar', $signer, 'sign', '--ks', $key, '--ks-key-alias', 'bcorn-release', '--v4-signing-enabled', 'false', '--out', $signed, $aligned)
     Run $java @('-jar', $signer, 'verify', '--verbose', '--print-certs', $signed)
@@ -203,7 +212,7 @@ try {
     $outputDir = SafePath (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'bcorn-releases')
     if ((Inside $outputDir $keyDir) -or (Inside $outputDir $backupDir)) { Fail 'APK output must be separate from key storage.' }
     [IO.Directory]::CreateDirectory($outputDir) | Out-Null
-    $output = Join-Path $outputDir ('bcorn-0.3.1-' + [Guid]::NewGuid().ToString('N') + '.apk')
+    $output = Join-Path $outputDir ('bcorn-0.3.2-' + [Guid]::NewGuid().ToString('N') + '.apk')
     # Copy to a private destination-volume staging directory; rename only a verified complete file.
     $publishStage = PrivateDirectory (Join-Path $outputDir ('.staging-' + [Guid]::NewGuid().ToString('N')))
     try {

@@ -2,7 +2,7 @@
 
 ## Package identity
 
-The migration build is **bcorn 0.3.1 / version code 4**, application ID **`com.bcorn.widget`**. The old application remains **`com.acorn.widget`**. The Kotlin/resource namespace remains `com.acorn.widget`; it is not the installed identity. Release builds are non-debuggable and unsigned until the separate local signing step. No shared UID or cross-package data access is used.
+The migration build is **bcorn 0.3.2 / version code 5**, application ID **`com.bcorn.widget`**. The old application remains **`com.acorn.widget`**. The Kotlin/resource namespace remains `com.acorn.widget`; it is not the installed identity. Release builds are non-debuggable and unsigned until the separate local signing step. No shared UID or cross-package data access is used.
 
 The old app must remain installed. Its latest “备份全部数据…” JSON is the migration source; an original import file does not contain later room/address edits. Import uses the normal preview/confirmation flow, preserves all supported course/event/history fields, and does not transfer OAuth credentials or remote ownership journals. Newer complete backups also support the separate assessment book, with replacement explicitly selected.
 
@@ -29,6 +29,10 @@ The handoff package contains only the unsigned APK, its public digest/identity m
 
 ## Configuration and acceptance gates
 
-Google OAuth remains disabled/unconfigured. The new Android application ID and its eventual signing certificate require their own authorized Google client registration; that is not created by changing the package or signing the APK. No OAuth grants, original Sheet edits or live calendar changes are part of migration packaging.
+Google sync defaults to disabled, and external OAuth remains unconfigured unless the owner registers it. The new Android application ID and its eventual signing certificate require their own authorized Google client registration; that is not created by changing the package or signing the APK. No OAuth grants, original Sheet edits or live calendar changes are part of migration packaging.
 
 Synthetic native/renderer tests do not prove physical Vivo coexistence, launcher behavior, notifications or live Google authorization. The final signed APK's package/version/certificate and hash must be verified before installation. Installation itself is not performed by this script.
+
+### Optional Google-ready build
+
+The default release keeps Google sync disabled. For an explicit Google-ready test build, pass `-PbcornGradeSyncConfigured=true` to Gradle and `--expect-grade-sync true` to the manifest checker. See [Google setup and build readiness](GRADES_SYNC.md#android-032-build-readiness-not-an-account-connection). The metadata key retains its code namespace. This opt-in does not assert external OAuth is registered and cannot grant access to any Sheet.

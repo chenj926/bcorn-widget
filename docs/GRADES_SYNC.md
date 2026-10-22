@@ -158,3 +158,28 @@ A ten-minute visible idle simulation performs eight metadata requests (initial p
 The grade panel provides Pause/Resume automatic sync. Pause persists a nonsecret connection-scoped preference in local browser/WebView storage, retains local grades and journal, stops scheduled transport, and does not revoke the Google grant. Resume reconciles automatically. An already in-flight request can finish. Grant revocation is separately handled by native authorization errors or the Google account controls.
 
 Validation commands: `node --test tests/grade-*.test.js tests/sync-*.test.js tests/desktop-grade-store.test.js`, `node tests/grades-dom.cjs`, and `node tests/grades-sync-dom.cjs`. The real renderer entrypoint is checked for executable module ordering. DOM tests execute actual UI and adapters with synthetic native storage/HTTP; they do not verify live OAuth, native build execution, physical device behavior, or browser layout.
+
+## Android 0.3.2 build readiness (not an account connection)
+
+Android defaults to Google sync disabled. Explicitly opt in only for an owner-operated test build:
+
+```sh
+./android/gradlew -p android :app:assembleRelease -PbcornGradeSyncConfigured=true
+python3 android/scripts/check-release-identity.py android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml --expect-grade-sync true
+```
+
+Omit the property (or pass `false`) for the normal disabled build. Other values fail the build. The property sets the manifest metadata flag only; it does not create a Google project, OAuth client, grant, spreadsheet, or network connection. The enabled build still needs working Google Play services, owner-configured APIs/consent and Android OAuth registration for `com.bcorn.widget` plus the actual retained signing certificate SHA-1. This Android AuthorizationClient path does not consume an embedded client ID, client secret, API key or `google-services.json`; do not add them. Enable Google Picker API as well as Drive and Sheets in the project. Request only `drive.file`.
+
+Both builds remain unsigned. Update the existing installed `com.bcorn.widget` using the SAME owner-held keystore, never a new key; 0.3.2 uses version code 5. Keep the historical `com.acorn.widget` and its data intact. Rebuilding or signing does not prove live Google authorization or sync. Test only an explicitly selected test copy, not the historical reference workbook.
+
+Existing-sheet mapping reads only A1:Z200 and does not parse arbitrary review/status columns. Never infer that historical numeric zero means ungraded. Keep ambiguous source values intact in a separate review column/tab and leave those rows unmapped until the owner resolves them. Formula destinations cannot be mapped as editable grades/weights.
+
+### Owner-operated Google Console setup
+
+1. In the owner's Google Cloud project, enable Google Sheets API, Google Drive API, and Google Picker API.
+2. Configure Google Auth platform Branding and Audience. For personal testing use External / Testing and add the owner's Google account as a test user. Set Data Access to the `https://www.googleapis.com/auth/drive.file` scope used by this app; do not replace it with full-Drive access.
+3. Create an OAuth client of type Android with package `com.bcorn.widget` and SHA-1 from the SAME certificate already used for the installed app. Inspect the locally signed APK with `apksigner verify --print-certs`; share only its public fingerprint if needed, never the keystore or password. No Web client ID or API key is supplied to this native AuthorizationClient implementation.
+4. Install the opted-in 0.3.2 APK signed with that retained key as an update. In 成绩 choose 连接现有 Google Sheet, then 选择 Google Sheet. Select the intended test copy and tab; inspect the read-only preview and confirm explicit grade/weight cell mappings. A picker selection and user consent, not a pasted URL, grants this app access to the selected file.
+5. Validate with one explicit test-copy change. Registration, build validation and automated tests do not substitute for this owner-operated end-to-end test. If permission is denied or configuration is incomplete, do not broaden scopes or edit a different workbook as a workaround.
+
+Official references: [Android authorization](https://developer.android.com/identity/authorization), [native Google Picker setup](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker), [OAuth consent configuration](https://developers.google.com/workspace/guides/configure-oauth-consent), [Google Auth clients](https://console.cloud.google.com/auth/clients).

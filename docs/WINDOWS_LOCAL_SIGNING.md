@@ -1,4 +1,4 @@
-# Windows 本地签名（bcorn 0.3.1）
+# Windows 本地签名（bcorn 0.3.2）
 
 此包是 `com.bcorn.widget` 的新身份，可与旧版 acorn 并行安装。未签名 APK 不能直接安装。密钥只在你的 Windows 电脑生成、保存；不要把密钥文件或密码发到聊天或上传。以后升级必须保留并复用同一密钥。
 
@@ -33,7 +33,7 @@
 交付元数据须由已验证构建填写真实 SHA-256（不能使用占位值）：
 
 ```json
-{"apk":"bcorn-0.3.1-unsigned.apk","sha256":"真实的64位SHA256","package":"com.bcorn.widget","versionName":"0.3.1","versionCode":4}
+{"apk":"bcorn-0.3.2-unsigned.apk","sha256":"真实的64位SHA256","package":"com.bcorn.widget","versionName":"0.3.2","versionCode":5}
 ```
 
 SHA-256 防止意外损坏，不替代交付来源真实性检查。仅运行你信任来源的整个交付包。文件中不包含密钥、密码、JDK 或 Android 工具二进制。
@@ -47,3 +47,11 @@ SHA-256 防止意外损坏，不替代交付来源真实性检查。仅运行你
 开发者可运行 `node --test android/tests/windows-signing-handoff.test.cjs` 检查源代码约束；Windows 上还可运行 `android/tests/check-windows-signing-parser.ps1` 做解析检查（不执行签名）。这些测试不等于真实 Windows 签名验证。目前未在 Windows 终端实际完成交互签名；不得宣称已验证双击/密码提示/ACL 的运行表现。
 
 工具行为参考：[apksigner](https://developer.android.com/tools/apksigner)、[sdkmanager](https://developer.android.com/tools/sdkmanager)。
+
+## 0.3.2 更新注意
+
+请继续使用上次已保存在 `%LOCALAPPDATA%\bcorn-signing\bcorn-release.p12` 的密钥和密码，不要生成第二把。脚本和 release-metadata.json 必须与本次 APK 同包更新：本版只接受 0.3.2 / versionCode 5，元数据 SHA-256 必须来自实际构建，不能沿用旧版摘要。
+
+已修复 Windows PowerShell `-File` 启动时在参数默认值读取空 `$PSScriptRoot` 的问题：现在参数绑定完成后才解析脚本目录。可先运行 `.\Sign-bcorn.ps1 -ValidateOnly`；这只检查 APK 和工具，不创建密钥。没有放宽执行策略或安全提示。
+
+Google-ready APK 只是开启原生授权入口，仍需你在自己的 Google 项目注册实际包名和签名 SHA-1、配置 APIs 和测试账号。它不会因为签名而自动连接任何表格。

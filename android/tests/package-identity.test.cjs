@@ -11,7 +11,7 @@ test('parallel install has a distinct application ID but preserves code/resource
   const build = read('app/build.gradle.kts');
   assert.match(build, /applicationId = "com\.bcorn\.widget"/);
   assert.match(build, /namespace = "com\.acorn\.widget"/);
-  assert.match(build, /versionCode = 4; versionName = "0\.3\.1"/);
+  assert.match(build, /versionCode = 5; versionName = "0\.3\.2"/);
   assert.match(build, /getByName\("debug"\) \{ signingConfig = null \}/);
   assert.match(build, /getByName\("release"\) \{ isDebuggable = false; signingConfig = null \}/);
 });
@@ -22,8 +22,8 @@ test('manifest points to actual classes without shared identity or exposed deep 
   assert.match(manifest, /android:name="com\.acorn\.widget\.MainActivity"/);
   assert.match(manifest, /android:name="com\.acorn\.widget\.TimetableWidgetProvider" android:exported="false"/);
   assert.doesNotMatch(manifest, /sharedUserId|<provider|android:authorities|<data\b/);
-  // Metadata is a code-owned key, not a package lookup; keep OAuth explicitly disabled.
-  assert.match(manifest, /android:name="com\.acorn\.widget\.GRADE_SYNC_CONFIGURED" android:value="false"/);
+  // Metadata stays code-owned; a strict opt-in Gradle property defaults to false.
+  assert.match(manifest, /android:name="com\.acorn\.widget\.GRADE_SYNC_CONFIGURED" android:value="\$\{bcornGradeSyncConfigured\}"/);
 });
 
 test('widget resources, explicit components and navigation remain in the running package', () => {
@@ -59,15 +59,22 @@ test('release manifest validator accepts isolated release and rejects old ID/deb
   const { spawnSync } = require('node:child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bcorn-manifest-test-'));
   const file = path.join(dir, 'synthetic.xml');
-  const manifest = read('app/src/main/AndroidManifest.xml').replace('<manifest xmlns:', '<manifest package="com.bcorn.widget" android:versionCode="4" android:versionName="0.3.1" xmlns:');
-  const run = text => {
+  const manifest = read('app/src/main/AndroidManifest.xml').replace('${bcornGradeSyncConfigured}', 'false').replace('<manifest xmlns:', '<manifest package="com.bcorn.widget" android:versionCode="5" android:versionName="0.3.2" xmlns:');
+  const run = (text, extra = []) => {
     fs.writeFileSync(file, text);
-    const result = spawnSync('python3', [path.join(root, 'scripts/check-release-identity.py'), file], { encoding: 'utf8' });
+    const result = spawnSync('python3', [path.join(root, 'scripts/check-release-identity.py'), file, ...extra], { encoding: 'utf8' });
     assert.ifError(result.error);
     return result;
   };
   try {
     assert.equal(run(manifest).status, 0);
+    const optimized = spawnSync("python3", ["-O", path.join(root, "scripts/check-release-identity.py"), file], { encoding: "utf8" });
+    assert.notEqual(optimized.status, 0);
+    assert.match(optimized.stderr, /requires Python assertions/);
+    const enabled = manifest.replace('android:value="false"', 'android:value="true"');
+    assert.equal(run(enabled, ['--expect-grade-sync', 'true']).status, 0);
+    assert.notEqual(run(manifest, ['--expect-grade-sync', 'true']).status, 0);
+    assert.notEqual(run(enabled, ['--expect-grade-sync', 'yes']).status, 0);
     for (const invalid of [
       manifest.replace('package="com.bcorn.widget"', 'package="com.acorn.widget"'),
       manifest.replace('<application ', '<application android:debuggable="true" '),
@@ -75,4 +82,12 @@ test('release manifest validator accepts isolated release and rejects old ID/deb
       manifest.replace('</application>', '<provider android:name="synthetic.Provider" android:authorities="com.acorn.widget.provider"/></application>')
     ]) assert.notEqual(run(invalid).status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('grade sync build readiness is explicit, strict, and not an OAuth credential', () => {
+  const build = read('app/build.gradle.kts');
+  assert.match(build, /gradleProperty\("bcornGradeSyncConfigured"\).orElse\("false"\)/);
+  assert.match(build, /require\(bcornGradeSyncConfigured in listOf\("true", "false"\)\)/);
+  assert.match(build, /manifestPlaceholders\["bcornGradeSyncConfigured"\] = bcornGradeSyncConfigured/);
+  assert.doesNotMatch(build, /client_secret|api_key|storePassword|keyPassword/);
 });

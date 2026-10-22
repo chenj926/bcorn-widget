@@ -44,7 +44,7 @@ export GRADLE_HOME=/path/to/gradle-8.13
 
 当前环境已丢失旧 debug key，构建不生成新签名。不要为了安装新签名包卸载旧应用，否则可能丢失私有数据。debug 默认不签名，避免 AGP 自动生成不同身份的密钥；并存版必须使用另行批准、妥善保存的新签名身份；之后的新版更新必须沿用它。
 
-安装交付候选使用非调试 release 构建（Android 版本 `0.3.1` / code `4`）：
+安装交付候选使用非调试 release 构建（Android 版本 `0.3.2` / code `5`）：
 
 ```sh
 "$GRADLE_HOME/bin/gradle" -p android :app:assembleRelease --offline --no-daemon
@@ -64,11 +64,11 @@ python3 android/scripts/check-release-identity.py android/app/build/intermediate
 - 新版不覆盖、删除或直接读取旧版私有目录，也不申请共享 UID。课表、成绩册、WebView 数据、组件浏览状态、日历绑定日志和 Android Keystore 均随新版应用身份隔离。
 - 新版需重新添加桌面组件；旧组件仍属于旧版。新版日历联动默认关闭，请勿让两版同时联动到同一系统日历，以免重复事件。
 - 显式组件保留代码 namespace，RemoteViews 使用当前运行包名；组件导航广播与 URI 使用新版身份。源清单没有自定义 ContentProvider authority 或外部 deep-link 入口；依赖清单仍须通过最终合并清单检查。
-- Google 成绩同步保持未配置；新包名和新签名证书必须单独注册 Android OAuth client 后才能启用。
+- Google 成绩同步默认未启用；新包名和新签名证书必须单独注册 Android OAuth client 后才能启用。
 
 ## 可选 Google 成绩表
 
-授权与 HTTP 请求由原生模块承担，WebView 不收到 OAuth token。仅申请 `drive.file` 并新建独立成绩表。应用前台自动检查轻量版本元数据，变化才读取表格；退到后台停止调度，下次打开自动追平。没有常驻同步服务。需要先配置真实 Google 项目及匹配包名和签名的 Android OAuth client；未配置时明确显示本机保存，不能宣称云同步可用。当前构建配置默认未连接，未进行真实授权。
+授权与 HTTP 请求由原生模块承担，WebView 不收到 OAuth token。仅申请 `drive.file`，支持新建独立成绩表或由用户使用 Picker 选择现有测试表。应用前台自动检查轻量版本元数据，变化才读取表格；退到后台停止调度，下次打开自动追平。没有常驻同步服务。需要先配置真实 Google 项目及匹配包名和签名的 Android OAuth client；未配置时明确显示本机保存，不能宣称云同步可用。当前构建配置默认未连接，未进行真实授权。
 
 ## 检查
 
@@ -82,3 +82,7 @@ node --test tests/package-identity.test.cjs
 真实生产 provider、RemoteViews apply/reapply、点击广播、CalendarProvider adapter、Activity JS 接口链均有合成 host 测试。原生根容器几何使用普通子 View 验证，因为 Robolectric 的 WebView provider 不实现真实 Chromium 布局。合成 PNG 在忽略的 build 目录。
 
 没有 Vivo 真机或模拟器验证。安装 / 升级、真实启动器、系统键盘 / WebView、账户云同步与提醒送达仍需设备验收；见 [`TESTING.md`](TESTING.md)。
+
+### 0.3.2 Google 授权入口的显式构建开关
+
+默认仍未启用。只有在为自己的 Google 项目准备测试版时，使用 `:app:assembleRelease -PbcornGradeSyncConfigured=true`；其他值（除 true/false）会失败。此开关只设置 manifest，不替你完成 Google 注册。验证启用版清单时，给 `check-release-identity.py` 加 `--expect-grade-sync true`。保持同一 keystore，版本已增为 0.3.2 / code 5。详见 `docs/GRADES_SYNC.md`。

@@ -1,9 +1,14 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+// Explicit build-time opt-in only; this does NOT register OAuth or grant account access.
+val bcornGradeSyncConfigured = providers.gradleProperty("bcornGradeSyncConfigured").orElse("false").get()
+require(bcornGradeSyncConfigured in listOf("true", "false")) {
+    "bcornGradeSyncConfigured must be exactly true or false"
+}
 android {
     namespace = "com.acorn.widget"
     compileSdk = 35
     // Separate installed identity preserves the legacy app and its private data.
-    defaultConfig { applicationId = "com.bcorn.widget"; minSdk = 26; targetSdk = 35; versionCode = 4; versionName = "0.3.1" }
+    defaultConfig { applicationId = "com.bcorn.widget"; minSdk = 26; targetSdk = 35; versionCode = 5; versionName = "0.3.2"; manifestPlaceholders["bcornGradeSyncConfigured"] = bcornGradeSyncConfigured }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     // Never let AGP silently create a new debug signing identity after environment reset.
